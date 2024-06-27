@@ -7,7 +7,8 @@ struct Cli {
     file: PathBuf,
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     dbg!(&cli);
+    Ok(())
 }
