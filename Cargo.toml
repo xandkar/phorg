@@ -1,10 +1,12 @@
 [package]
 name = "phorg"
 description = "Photo files organizer"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 clap = { version = "4.5.7", features = ["derive"] }
 kamadak-exif = "0.5.5"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }

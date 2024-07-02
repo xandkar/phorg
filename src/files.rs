@@ -25,10 +25,7 @@ impl Iterator for Files {
                 }
                 Ok(meta) if meta.is_dir() => match fs::read_dir(&path) {
                     Err(error) => {
-                        eprintln!(
-                            "[error] Failed to read directory: {:?}. Error: {:?}",
-                            &path, &error
-                        );
+                        tracing::error!(?path, ?error, "Failed to read directory",);
                     }
                     Ok(entries) => {
                         for entry_result in entries {
@@ -37,22 +34,22 @@ impl Iterator for Files {
                                     self.frontier.push_back(entry.path());
                                 }
                                 Err(error) => {
-                                    eprintln!(
-                                        "[error] Failed to read an entry from: {:?}. Error: {:?}",
-                                        &path, &error
+                                    tracing::error!(
+                                        from = ?path, ?error,
+                                        "Failed to read an entry",
                                     );
                                 }
                             }
                         }
                     }
                 },
-                Ok(_) => {
-                    eprintln!("[debug] Neither file nor directory: {:?}", &path);
+                Ok(meta) => {
+                    tracing::debug!(?path, ?meta, "Neither file nor directory");
                 }
                 Err(error) => {
-                    eprintln!(
-                        "[error] Failed to read metadata: {:?}. Error: {:?}",
-                        &path, &error
+                    tracing::error!(
+                        from = ?path, ?error,
+                        "Failed to read metadata",
                     );
                 }
             }

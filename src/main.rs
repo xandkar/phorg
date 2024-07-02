@@ -6,6 +6,10 @@ use phorg::opt::Opt;
 
 #[derive(Debug, Parser)]
 struct Cli {
+    /// Specify log level, if any.
+    #[clap(short, long = "log")]
+    log_level: Option<tracing::Level>,
+
     /// Output table field separator.
     #[clap(short, long, default_value = "|")]
     sep: String,
@@ -32,8 +36,26 @@ impl Cli {
     }
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    dbg!(&cli);
+    tracing_init(cli.log_level)?;
+    tracing::info!(?cli, "Starting");
     phorg::organize(&cli.path, &cli.to_opt());
+    Ok(())
+}
+
+fn tracing_init(level: Option<tracing::Level>) -> anyhow::Result<()> {
+    use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Layer};
+
+    if let Some(level) = level {
+        let layer_stderr = fmt::Layer::new()
+            .with_writer(std::io::stderr)
+            .with_ansi(true)
+            .with_file(false)
+            .with_line_number(true)
+            .with_thread_ids(true)
+            .with_filter(EnvFilter::from_default_env().add_directive(level.into()));
+        tracing::subscriber::set_global_default(tracing_subscriber::registry().with(layer_stderr))?;
+    }
+    Ok(())
 }

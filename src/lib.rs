@@ -13,28 +13,27 @@ pub fn organize(path: &Path, opt: &Opt) {
     explore(path, opt);
 }
 
+#[tracing::instrument(skip(opt))]
 fn explore(path: &Path, opt: &Opt) {
+    tracing::debug!(?path, ?opt, "Starting");
     let mut seen = 0;
 
     for path in files::find(path) {
         seen += 1;
         if let Err(error) = examine(&path, opt) {
-            eprintln!(
-                "[error] Failed to examine file: {:?}. Error: {:?}",
-                &path, &error
-            );
+            tracing::error!(?error, ?path, "Failed to examine file",);
         }
     }
-    eprintln!("[debug] Seen {} files.", seen);
+    tracing::debug!(files_seen = seen, "Finished");
 }
 
+#[tracing::instrument(skip(opt))]
 fn examine(path: &Path, opt: &Opt) -> anyhow::Result<()> {
     let file = std::fs::File::open(path)?;
     let mut bufreader = std::io::BufReader::new(&file);
     let exifreader = exif::Reader::new();
     let (class, value) = match exifreader.read_from_container(&mut bufreader) {
         Err(exif::Error::InvalidFormat(_)) => {
-            // eprintln!("[warn] Not a supported image file: {:?}", path);
             // Skip non-image files.
             return Ok(());
         }
