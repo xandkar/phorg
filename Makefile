@@ -6,6 +6,7 @@ checks:
 		-W clippy::pedantic \
 		-W clippy::cast-possible-truncation \
 		-W clippy::cast-sign-loss \
+		-A clippy::redundant_closure_for_method_calls \
 		-A clippy::single_match_else \
 		-A clippy::uninlined-format-args \
 		-A clippy::missing_errors_doc
