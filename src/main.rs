@@ -23,32 +23,62 @@ struct Cli {
     hide_success: bool,
 
     #[clap(default_value = ".")]
-    dir: PathBuf,
+    path: PathBuf,
 }
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     let cli = Cli::parse();
     dbg!(&cli);
 
     let mut seen = 0;
-    let mut dir_queue: VecDeque<PathBuf> = VecDeque::new();
-    dir_queue.push_back(cli.dir);
-    while let Some(dir) = dir_queue.pop_front() {
-        for entry_result in fs::read_dir(dir)? {
-            let entry = entry_result?;
-            let path = entry.path();
-            match entry.file_type()? {
-                typ if typ.is_file() => {
-                    seen += 1;
-                    examine(&path, &cli.sep, cli.show_failed, cli.hide_success)?;
+    let mut frontier: VecDeque<PathBuf> = VecDeque::new();
+    frontier.push_back(cli.path);
+    while let Some(path) = frontier.pop_front() {
+        match fs::metadata(&path) {
+            Ok(meta) if meta.is_file() => {
+                seen += 1;
+                if let Err(error) = examine(&path, &cli.sep, cli.show_failed, cli.hide_success) {
+                    eprintln!(
+                        "[error] Failed to examine file: {:?}. Error: {:?}",
+                        &path, &error
+                    );
                 }
-                typ if typ.is_dir() => dir_queue.push_back(path),
-                _ => (),
+            }
+            Ok(meta) if meta.is_dir() => match fs::read_dir(&path) {
+                Err(error) => {
+                    eprintln!(
+                        "[error] Failed to read directory: {:?}. Error: {:?}",
+                        &path, &error
+                    );
+                }
+                Ok(entries) => {
+                    for entry_result in entries {
+                        match entry_result {
+                            Ok(entry) => {
+                                frontier.push_back(entry.path());
+                            }
+                            Err(error) => {
+                                eprintln!(
+                                    "[error] Failed to read an entry from: {:?}. Error: {:?}",
+                                    &path, &error
+                                );
+                            }
+                        }
+                    }
+                }
+            },
+            Ok(_) => {
+                eprintln!("[debug] Neither file nor directory: {:?}", &path);
+            }
+            Err(error) => {
+                eprintln!(
+                    "[error] Failed to read metadata: {:?}. Error: {:?}",
+                    &path, &error
+                );
             }
         }
     }
     eprintln!("[debug] Seen {} files.", seen);
-    Ok(())
 }
 
 fn examine(path: &Path, sep: &str, show_failed: bool, hide_success: bool) -> anyhow::Result<()> {
