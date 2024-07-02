@@ -4,7 +4,7 @@ mod files;
 
 // TODO Keep clap/CLI-specific stuff out of lib code.
 #[derive(clap::Subcommand, Debug)]
-pub enum Mode {
+pub enum Op {
     /// Dry run. Just print what would be done.
     Show {
         /// Output table field separator.

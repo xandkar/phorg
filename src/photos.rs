@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Context;
 
-use crate::{files, Mode};
+use crate::{files, Op};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -125,8 +125,8 @@ pub fn find(path: &Path) -> impl Iterator<Item = Photo> {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn organize(src: &Path, dst: &Path, mode: &Mode) -> anyhow::Result<()> {
-    tracing::info!(?mode, ?src, ?dst, "Starting");
+pub fn organize(src: &Path, dst: &Path, op: &Op) -> anyhow::Result<()> {
+    tracing::info!(?op, ?src, ?dst, "Starting");
     let src = src
         .canonicalize()
         .context(format!("Failed to canonicalize src path: {:?}", src))?;
@@ -142,10 +142,10 @@ pub fn organize(src: &Path, dst: &Path, mode: &Mode) -> anyhow::Result<()> {
         .context(format!("Failed to canonicalize dst path: {:?}", dst))?;
     tracing::info!(?src, ?dst, "Canonicalized");
     for photo in find(&src) {
-        match mode {
-            Mode::Show { sep } => photo.show(sep),
-            Mode::Copy => photo.organize(&dst, false)?,
-            Mode::Move => photo.organize(&dst, true)?,
+        match op {
+            Op::Show { sep } => photo.show(sep),
+            Op::Copy => photo.organize(&dst, false)?,
+            Op::Move => photo.organize(&dst, true)?,
         }
     }
     tracing::info!("Finished");

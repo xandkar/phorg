@@ -18,12 +18,12 @@ struct Cli {
 
     /// What to do with the found photo files.
     #[clap(subcommand)]
-    mode: phorg::Mode,
+    op: phorg::Op,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     phorg::tracing_init(cli.log_level)?;
-    phorg::photos::organize(&cli.src, &cli.dst, &cli.mode)?;
+    phorg::photos::organize(&cli.src, &cli.dst, &cli.op)?;
     Ok(())
 }
