@@ -1,6 +1,9 @@
 phorg
 ===============================================================================
 
+[![test status](https://github.com/xandkar/phorg/actions/workflows/test.yml/badge.svg)](https://github.com/xandkar/phorg/actions)
+[![dependencies status](https://deps.rs/repo/github/xandkar/phorg/status.svg)](https://deps.rs/repo/github/xandkar/phorg)
+
 Photo organizer.
 
 Given a `<src>` and `<dst>` directories:
