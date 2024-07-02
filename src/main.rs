@@ -9,11 +9,9 @@ struct Cli {
     log_level: Option<tracing::Level>,
 
     /// Where to look for photo files.
-    #[clap(long)]
     src: PathBuf,
 
     /// Where to create directory structure with found photo files.
-    #[clap(long)]
     dst: PathBuf,
 
     /// What to do with the found photo files.
