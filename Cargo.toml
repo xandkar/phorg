@@ -1,6 +1,6 @@
 [package]
 name = "phorg"
-version = "0.3.0"
+version = "0.3.1"
 description = "Photo files organizer"
 repository = "https://github.com/xandkar/phorg"
 keywords = ["photo", "organizer", "exif"]
