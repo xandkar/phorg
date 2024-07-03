@@ -121,7 +121,20 @@ impl Photo {
 
 #[tracing::instrument]
 pub fn find(path: &Path) -> impl Iterator<Item = Photo> {
-    files::find(path).filter_map(|path| Photo::read(&path).ok())
+    files::find(path)
+        .filter(|path| is_image(path))
+        .filter_map(|path| Photo::read(path.as_path()).ok())
+}
+
+fn is_image(path: &Path) -> bool {
+    infer::get_from_path(path)
+        .map_err(|error| {
+            tracing::error!(?path, ?error, "Failed to read file.");
+        })
+        .map(|typ_opt| typ_opt.map(|typ| matches!(typ.matcher_type(), infer::MatcherType::Image)))
+        .ok()
+        .flatten()
+        .unwrap_or(false)
 }
 
 #[tracing::instrument(skip_all)]
