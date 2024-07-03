@@ -131,10 +131,9 @@ fn is_image(path: &Path) -> bool {
         .map_err(|error| {
             tracing::error!(?path, ?error, "Failed to read file.");
         })
-        .map(|typ_opt| typ_opt.map(|typ| matches!(typ.matcher_type(), infer::MatcherType::Image)))
         .ok()
         .flatten()
-        .unwrap_or(false)
+        .is_some_and(|t| matches!(t.matcher_type(), infer::MatcherType::Image))
 }
 
 #[tracing::instrument(skip_all)]
