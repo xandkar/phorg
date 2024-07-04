@@ -122,7 +122,7 @@ impl Photo {
     }
 
     #[tracing::instrument]
-    fn organize(&self, dst_dir: &Path, permanently: bool) -> anyhow::Result<()> {
+    fn organize(&self, dst_dir: &Path, permanently: bool, force: bool) -> anyhow::Result<()> {
         tracing::info!("Organizing");
         let src = self.src.as_path();
         let dst = self.dst.as_ref().map(|dst_file| dst_dir.join(dst_file));
@@ -133,23 +133,37 @@ impl Photo {
         match dst {
             None => {
                 tracing::warn!("Ignoring. dst undetermined.");
-            }
-            Some(dst) if permanently => {
-                tracing::info!("Moving");
-                fs::rename(src, &dst).context(format!(
-                    "Failed to rename file. src={:?}. dst={:?}",
-                    src, &dst
-                ))?;
+                return Ok(());
             }
             Some(dst) => {
-                tracing::info!("Copying");
-                fs::copy(src, &dst).context(format!(
-                    "Failed to copy file. src={:?}. dst={:?}",
-                    src, &dst
-                ))?;
+                let exists = dst.try_exists()?;
+                if exists && src == dst {
+                    // XXX src should already be canonicalized.
+                    tracing::warn!(?src, ?dst, "Identical src and dst. Skipping.");
+                    return Ok(());
+                }
+                if exists && !force {
+                    tracing::warn!(
+                        ?dst,
+                        "dst exists, but force overwrite not requested. Skipping."
+                    );
+                    return Ok(());
+                }
+                if permanently {
+                    tracing::info!("Moving");
+                    fs::rename(src, &dst).context(format!(
+                        "Failed to rename file. src={:?}. dst={:?}",
+                        src, &dst
+                    ))?;
+                } else {
+                    tracing::info!("Copying");
+                    fs::copy(src, &dst).context(format!(
+                        "Failed to copy file. src={:?}. dst={:?}",
+                        src, &dst
+                    ))?;
+                }
             }
         }
-        tracing::info!("Done");
         Ok(())
     }
 }
@@ -204,7 +218,7 @@ fn fetch_type(path: &Path) -> Option<infer::Type> {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ) -> anyhow::Result<()> {
+pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ, force: bool) -> anyhow::Result<()> {
     tracing::info!(?op, ?src, ?dst, "Starting");
     let src = src
         .canonicalize()
@@ -223,8 +237,8 @@ pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ) -> anyhow::Result<()>
     for photo in find(&src, typ) {
         match op {
             Op::Show { sep } => photo.show(sep),
-            Op::Copy => photo.organize(&dst, false)?,
-            Op::Move => photo.organize(&dst, true)?,
+            Op::Copy => photo.organize(&dst, false, force)?,
+            Op::Move => photo.organize(&dst, true, force)?,
         }
     }
     tracing::info!("Finished");
