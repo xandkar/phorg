@@ -54,7 +54,7 @@ impl Photo {
                 })
                 .map(|t| t.naive_local())
         });
-        let dst = timestamp.and_then(|t| dst(&path, t));
+        let dst = timestamp.and_then(|t| dst(&path, t).ok());
         let selph = Self {
             src: path,
             dst,
@@ -97,7 +97,7 @@ impl Photo {
                 if timestamp.is_none() {
                     tracing::error!(?path, "Timestamp data not found");
                 }
-                let dst = timestamp.and_then(|ts| dst(&path, ts));
+                let dst = timestamp.and_then(|ts| dst(&path, ts).ok());
                 Ok(Self {
                     src: path,
                     dst,
@@ -280,39 +280,53 @@ fn date_time_exif_to_chrono(dt: &exif::DateTime) -> Option<chrono::NaiveDateTime
     Some(chrono::NaiveDateTime::new(date, time))
 }
 
-fn dst(src: &Path, ts: Timestamp) -> Option<PathBuf> {
-    match (src.file_stem(), src.extension()) {
-        (Some(stem_old), Some(extension)) => {
-            use chrono::{Datelike, Timelike}; // Access timestamp fields.
+fn dst(src: &Path, ts: Timestamp) -> anyhow::Result<PathBuf> {
+    use chrono::{Datelike, Timelike}; // Access timestamp fields.
 
-            let year = format!("{:02}", ts.year());
-            let month = format!("{:02}", ts.month());
-            let day = format!("{:02}", ts.day());
-            let hour = format!("{:02}", ts.hour());
-            let minute = format!("{:02}", ts.minute());
-            let second = format!("{:02}", ts.second());
-            let stem_old = stem_old
-                .to_str()
-                .map_or(String::new(), |x| format!("--{}", x));
-            let stem_new = format!(
-                "{}-{}-{}--{}:{}:{}{}",
-                &year, &month, &day, &hour, &minute, &second, &stem_old
-            );
-            let name_new = PathBuf::from(stem_new).with_extension(extension);
-            let dir: PathBuf = [&year, &month, &day].iter().collect();
-            Some(dir.join(name_new))
+    let digest = sha256_hex(src)
+        .map_err(|error| {
+            tracing::error!(path = ?src, ?error, "Failed to read file");
+            error
+        })
+        .context(format!("Failed to read file: {:?}", src))?;
+    let year = format!("{:02}", ts.year());
+    let month = format!("{:02}", ts.month());
+    let day = format!("{:02}", ts.day());
+    let hour = format!("{:02}", ts.hour());
+    let minute = format!("{:02}", ts.minute());
+    let second = format!("{:02}", ts.second());
+
+    let stem = [
+        [year.as_str(), month.as_str(), day.as_str()].join("-"),
+        [hour, minute, second].join(":"),
+        digest,
+    ]
+    .join("--");
+
+    let extension = src.extension().unwrap_or_default();
+    let name = PathBuf::from(stem).with_extension(extension);
+    let dir: PathBuf = [year, month, day].iter().collect();
+    let dst = dir.join(name);
+    Ok(dst)
+}
+
+fn sha256_hex<P: AsRef<Path>>(path: P) -> io::Result<String> {
+    use std::io::Read;
+
+    use sha2::{Digest, Sha256};
+
+    let path = path.as_ref();
+    let mut file = std::fs::File::open(path)?;
+    let mut hash = Sha256::default();
+    let mut buff = [0; 1024];
+    loop {
+        let n = file.read(&mut buff)?;
+        if n == 0 {
+            break;
         }
-        (None, None) => {
-            tracing::error!(path = ?src, "Missing stem and extension");
-            None
-        }
-        (None, Some(_)) => {
-            tracing::error!(path = ?src, "Missing stem");
-            None
-        }
-        (Some(_), None) => {
-            tracing::error!(path = ?src, "Missing extension");
-            None
-        }
+        hash.update(&buff[..n]);
     }
+    let digest = hash.finalize();
+    let hex = format!("{:x}", digest);
+    Ok(hex)
 }

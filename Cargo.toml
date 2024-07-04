@@ -1,6 +1,6 @@
 [package]
 name = "phorg"
-version = "0.5.0"
+version = "0.6.0"
 description = "Photo files organizer"
 repository = "https://github.com/xandkar/phorg"
 keywords = ["photo", "organizer", "exif"]
@@ -16,6 +16,7 @@ clap = { version = "4.5.7", features = ["derive"] }
 infer = "0.16.0"
 kamadak-exif = "0.5.5"
 nom-exif = "1.2.0"
+sha2 = "0.10.8"
 thiserror = "1.0.61"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
