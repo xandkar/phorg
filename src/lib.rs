@@ -19,6 +19,12 @@ pub enum Op {
     Move,
 }
 
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum Typ {
+    Image,
+    Video,
+}
+
 pub fn tracing_init(level: Option<tracing::Level>) -> anyhow::Result<()> {
     use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Layer};
 

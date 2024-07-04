@@ -8,6 +8,10 @@ struct Cli {
     #[clap(short, long = "log")]
     log_level: Option<tracing::Level>,
 
+    /// Type of files to filter for.
+    #[clap(short, long = "type", name = "TYPE", value_enum, default_value_t = phorg::Typ::Image)]
+    typ: phorg::Typ,
+
     /// Where to look for photo files.
     src: PathBuf,
 
@@ -22,6 +26,6 @@ struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     phorg::tracing_init(cli.log_level)?;
-    phorg::photos::organize(&cli.src, &cli.dst, &cli.op)?;
+    phorg::photos::organize(&cli.src, &cli.dst, &cli.op, cli.typ)?;
     Ok(())
 }

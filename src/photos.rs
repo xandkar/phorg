@@ -1,11 +1,12 @@
 use std::{
-    fs, io,
+    fs::{self, File},
+    io,
     path::{Path, PathBuf},
 };
 
 use anyhow::Context;
 
-use crate::{files, Op};
+use crate::{files, Op, Typ};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -22,15 +23,47 @@ pub enum Error {
     Other(#[from] exif::Error),
 }
 
+pub type Timestamp = chrono::NaiveDateTime;
+
 #[derive(Debug)]
 pub struct Photo {
     pub src: PathBuf,
     pub dst: Option<PathBuf>,
-    pub timestamp: Option<exif::DateTime>,
+    pub timestamp: Option<Timestamp>,
 }
 
 impl Photo {
-    pub fn read(path: &Path) -> Result<Self, Error> {
+    pub fn read(path: &Path, typ: Typ) -> Result<Self, Error> {
+        match typ {
+            Typ::Image => Self::read_image(path),
+            Typ::Video => Self::read_video(path),
+        }
+    }
+
+    pub fn read_video(path: &Path) -> Result<Self, Error> {
+        let path = path.to_path_buf();
+        let file = std::fs::File::open(&path)?;
+        let timestamp: Option<Timestamp> = nom_exif::parse_metadata(file).ok().and_then(|pairs| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == "com.apple.quicktime.creationdate")
+                .map(|(_, v)| v)
+                .and_then(|entry| match entry {
+                    nom_exif::EntryValue::Time(t) => Some(t),
+                    _ => None,
+                })
+                .map(|t| t.naive_local())
+        });
+        let dst = timestamp.and_then(|t| dst(&path, t));
+        let selph = Self {
+            src: path,
+            dst,
+            timestamp,
+        };
+        Ok(selph)
+    }
+
+    pub fn read_image(path: &Path) -> Result<Self, Error> {
         let path = path.to_path_buf();
         let file = std::fs::File::open(&path)?;
         let mut bufreader = std::io::BufReader::new(&file);
@@ -58,11 +91,13 @@ impl Photo {
                 Err(Error::Other(error))
             }
             Ok(exif) => {
-                let timestamp = get_date_time_original(&exif)?;
+                let timestamp = get_date_time_original(&exif)?
+                    .as_ref()
+                    .and_then(date_time_exif_to_chrono);
                 if timestamp.is_none() {
                     tracing::error!(?path, "Timestamp data not found");
                 }
-                let dst = timestamp.as_ref().and_then(|ts| dst(&path, ts));
+                let dst = timestamp.and_then(|ts| dst(&path, ts));
                 Ok(Self {
                     src: path,
                     dst,
@@ -120,24 +155,56 @@ impl Photo {
 }
 
 #[tracing::instrument]
-pub fn find(path: &Path) -> impl Iterator<Item = Photo> {
+pub fn find(path: &Path, typ: Typ) -> impl Iterator<Item = Photo> {
     files::find(path)
-        .filter(|path| is_image(path))
-        .filter_map(|path| Photo::read(path.as_path()).ok())
+        .filter(move |path| {
+            let is_type = match typ {
+                Typ::Image => file_is_image(path),
+                Typ::Video => file_is_video(path),
+            };
+            tracing::debug!(?path, ?typ, ?is_type, "Type filter");
+            is_type
+        })
+        .filter_map(move |path| {
+            let result_nom: anyhow::Result<Vec<(String, nom_exif::EntryValue)>> = File::open(&path)
+                .map_err(anyhow::Error::from)
+                .and_then(|f| {
+                    let data = nom_exif::parse_metadata(f)?;
+                    Ok(data)
+                });
+            let result = Photo::read(path.as_path(), typ);
+            tracing::debug!(?result, ?result_nom, "Fetched");
+            result.ok()
+        })
 }
 
-fn is_image(path: &Path) -> bool {
+fn file_is_image(path: &Path) -> bool {
+    fetch_type(path).is_some_and(type_is_image)
+}
+
+fn file_is_video(path: &Path) -> bool {
+    fetch_type(path).is_some_and(type_is_video)
+}
+
+fn type_is_image(ty: infer::Type) -> bool {
+    matches!(ty.matcher_type(), infer::MatcherType::Image)
+}
+
+fn type_is_video(ty: infer::Type) -> bool {
+    matches!(ty.matcher_type(), infer::MatcherType::Video)
+}
+
+fn fetch_type(path: &Path) -> Option<infer::Type> {
     infer::get_from_path(path)
         .map_err(|error| {
             tracing::error!(?path, ?error, "Failed to read file.");
         })
         .ok()
         .flatten()
-        .is_some_and(|t| matches!(t.matcher_type(), infer::MatcherType::Image))
 }
 
 #[tracing::instrument(skip_all)]
-pub fn organize(src: &Path, dst: &Path, op: &Op) -> anyhow::Result<()> {
+pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ) -> anyhow::Result<()> {
     tracing::info!(?op, ?src, ?dst, "Starting");
     let src = src
         .canonicalize()
@@ -153,7 +220,7 @@ pub fn organize(src: &Path, dst: &Path, op: &Op) -> anyhow::Result<()> {
         .canonicalize()
         .context(format!("Failed to canonicalize dst path: {:?}", dst))?;
     tracing::info!(?src, ?dst, "Canonicalized");
-    for photo in find(&src) {
+    for photo in find(&src, typ) {
         match op {
             Op::Show { sep } => photo.show(sep),
             Op::Copy => photo.organize(&dst, false)?,
@@ -185,26 +252,31 @@ fn get_date_time_original(exif: &exif::Exif) -> Result<Option<exif::DateTime>, E
     }
 }
 
-fn dst(
-    src: &Path,
-    exif::DateTime {
-        year,
-        month,
-        day,
-        hour,
-        minute,
-        second,
-        ..
-    }: &exif::DateTime,
-) -> Option<PathBuf> {
+fn date_time_exif_to_chrono(dt: &exif::DateTime) -> Option<chrono::NaiveDateTime> {
+    let time = chrono::NaiveTime::from_hms_opt(
+        u32::from(dt.hour),
+        u32::from(dt.minute),
+        u32::from(dt.second),
+    )?;
+    let date = chrono::NaiveDate::from_ymd_opt(
+        i32::from(dt.year),
+        u32::from(dt.month),
+        u32::from(dt.day),
+    )?;
+    Some(chrono::NaiveDateTime::new(date, time))
+}
+
+fn dst(src: &Path, ts: Timestamp) -> Option<PathBuf> {
     match (src.file_stem(), src.extension()) {
         (Some(stem_old), Some(extension)) => {
-            let year = format!("{:02}", year);
-            let month = format!("{:02}", month);
-            let day = format!("{:02}", day);
-            let hour = format!("{:02}", hour);
-            let minute = format!("{:02}", minute);
-            let second = format!("{:02}", second);
+            use chrono::{Datelike, Timelike}; // Access timestamp fields.
+
+            let year = format!("{:02}", ts.year());
+            let month = format!("{:02}", ts.month());
+            let day = format!("{:02}", ts.day());
+            let hour = format!("{:02}", ts.hour());
+            let minute = format!("{:02}", ts.minute());
+            let second = format!("{:02}", ts.second());
             let stem_old = stem_old
                 .to_str()
                 .map_or(String::new(), |x| format!("--{}", x));
