@@ -16,10 +16,10 @@ struct Cli {
     #[clap(short, long = "type", name = "TYPE", value_enum, default_value_t = phorg::Typ::Image)]
     typ: phorg::Typ,
 
-    /// Where to look for photo files.
+    /// Where to look for photo/video files.
     src: PathBuf,
 
-    /// Where to create directory structure with found photo files.
+    /// Where to create directory structure with found photo/video files.
     dst: PathBuf,
 
     /// What to do with the found photo files.
