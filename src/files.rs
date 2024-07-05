@@ -25,7 +25,11 @@ impl Iterator for Files {
                 }
                 Ok(meta) if meta.is_dir() => match fs::read_dir(&path) {
                     Err(error) => {
-                        tracing::error!(?path, ?error, "Failed to read directory",);
+                        tracing::error!(
+                            ?path,
+                            ?error,
+                            "Failed to read directory",
+                        );
                     }
                     Ok(entries) => {
                         for entry_result in entries {
@@ -44,7 +48,11 @@ impl Iterator for Files {
                     }
                 },
                 Ok(meta) => {
-                    tracing::debug!(?path, ?meta, "Neither file nor directory");
+                    tracing::debug!(
+                        ?path,
+                        ?meta,
+                        "Neither file nor directory"
+                    );
                 }
                 Err(error) => {
                     tracing::error!(

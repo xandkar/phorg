@@ -43,17 +43,18 @@ impl Photo {
     pub fn read_video(path: &Path) -> Result<Self, Error> {
         let path = path.to_path_buf();
         let file = std::fs::File::open(&path)?;
-        let timestamp: Option<Timestamp> = nom_exif::parse_metadata(file).ok().and_then(|pairs| {
-            pairs
-                .iter()
-                .find(|(k, _)| k == "com.apple.quicktime.creationdate")
-                .map(|(_, v)| v)
-                .and_then(|entry| match entry {
-                    nom_exif::EntryValue::Time(t) => Some(t),
-                    _ => None,
-                })
-                .map(|t| t.naive_local())
-        });
+        let timestamp: Option<Timestamp> =
+            nom_exif::parse_metadata(file).ok().and_then(|pairs| {
+                pairs
+                    .iter()
+                    .find(|(k, _)| k == "com.apple.quicktime.creationdate")
+                    .map(|(_, v)| v)
+                    .and_then(|entry| match entry {
+                        nom_exif::EntryValue::Time(t) => Some(t),
+                        _ => None,
+                    })
+                    .map(|t| t.naive_local())
+            });
         let dst = timestamp.and_then(|t| dst(&path, t).ok());
         let selph = Self {
             src: path,
@@ -69,7 +70,9 @@ impl Photo {
         let mut bufreader = std::io::BufReader::new(&file);
         let exifreader = exif::Reader::new();
         match exifreader.read_from_container(&mut bufreader) {
-            Err(exif::Error::InvalidFormat(_)) => Err(Error::InvalidFormat(path)),
+            Err(exif::Error::InvalidFormat(_)) => {
+                Err(Error::InvalidFormat(path))
+            }
             Err(exif::Error::BlankValue(msg)) => {
                 tracing::error!(?path, ?msg, "Blank value");
                 Ok(Self {
@@ -113,22 +116,29 @@ impl Photo {
             .timestamp
             .as_ref()
             .map_or("--".to_string(), |ts| ts.to_string());
-        let dst = self
-            .dst
-            .as_ref()
-            .map_or("--".to_string(), |dst| dst.to_string_lossy().to_string());
+        let dst = self.dst.as_ref().map_or("--".to_string(), |dst| {
+            dst.to_string_lossy().to_string()
+        });
         let row = [src, timestamp, dst].join(sep);
         println!("{}", row);
     }
 
     #[tracing::instrument]
-    fn organize(&self, dst_dir: &Path, permanently: bool, force: bool) -> anyhow::Result<()> {
+    fn organize(
+        &self,
+        dst_dir: &Path,
+        permanently: bool,
+        force: bool,
+    ) -> anyhow::Result<()> {
         tracing::info!("Organizing");
         let src = self.src.as_path();
         let dst = self.dst.as_ref().map(|dst_file| dst_dir.join(dst_file));
-        if let Some(dst_parent) = dst.as_ref().and_then(|path| path.parent()) {
-            fs::create_dir_all(dst_parent)
-                .context(format!("Failed to create parent dir: {:?}", dst_parent))?;
+        if let Some(dst_parent) = dst.as_ref().and_then(|path| path.parent())
+        {
+            fs::create_dir_all(dst_parent).context(format!(
+                "Failed to create parent dir: {:?}",
+                dst_parent
+            ))?;
         }
         match dst {
             None => {
@@ -139,7 +149,11 @@ impl Photo {
                 let exists = dst.try_exists()?;
                 if exists && src == dst {
                     // XXX src should already be canonicalized.
-                    tracing::warn!(?src, ?dst, "Identical src and dst. Skipping.");
+                    tracing::warn!(
+                        ?src,
+                        ?dst,
+                        "Identical src and dst. Skipping."
+                    );
                     return Ok(());
                 }
                 if exists && !force {
@@ -180,12 +194,14 @@ pub fn find(path: &Path, typ: Typ) -> impl Iterator<Item = Photo> {
             is_type
         })
         .filter_map(move |path| {
-            let result_nom: anyhow::Result<Vec<(String, nom_exif::EntryValue)>> = File::open(&path)
-                .map_err(anyhow::Error::from)
-                .and_then(|f| {
+            let result_nom: anyhow::Result<
+                Vec<(String, nom_exif::EntryValue)>,
+            > = File::open(&path).map_err(anyhow::Error::from).and_then(
+                |f| {
                     let data = nom_exif::parse_metadata(f)?;
                     Ok(data)
-                });
+                },
+            );
             let result = Photo::read(path.as_path(), typ);
             tracing::debug!(?result, ?result_nom, "Fetched");
             result.ok()
@@ -218,17 +234,24 @@ fn fetch_type(path: &Path) -> Option<infer::Type> {
 }
 
 #[tracing::instrument(skip_all)]
-pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ, force: bool) -> anyhow::Result<()> {
+pub fn organize(
+    src: &Path,
+    dst: &Path,
+    op: &Op,
+    typ: Typ,
+    force: bool,
+) -> anyhow::Result<()> {
     tracing::info!(?op, ?src, ?dst, "Starting");
     let src = src
         .canonicalize()
         .context(format!("Failed to canonicalize src path: {:?}", src))?;
-    if !dst
-        .try_exists()
-        .context(format!("Failed to check existence of dst path: {:?}", &dst))?
-    {
+    if !dst.try_exists().context(format!(
+        "Failed to check existence of dst path: {:?}",
+        &dst
+    ))? {
         tracing::info!(path = ?dst, "Dst dir does not exist. Creating.");
-        fs::create_dir_all(dst).context(format!("Failed to create dst dir: {:?}", dst))?;
+        fs::create_dir_all(dst)
+            .context(format!("Failed to create dst dir: {:?}", dst))?;
     }
     let dst = dst
         .canonicalize()
@@ -246,7 +269,9 @@ pub fn organize(src: &Path, dst: &Path, op: &Op, typ: Typ, force: bool) -> anyho
 }
 
 // Ref: exif::tag::d_datetime (private).
-fn get_date_time_original(exif: &exif::Exif) -> Result<Option<exif::DateTime>, Error> {
+fn get_date_time_original(
+    exif: &exif::Exif,
+) -> Result<Option<exif::DateTime>, Error> {
     match exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY) {
         None => Ok(None),
         Some(field) => match &field.value {
@@ -255,7 +280,10 @@ fn get_date_time_original(exif: &exif::Exif) -> Result<Option<exif::DateTime>, E
                 Some(data) => {
                     let dt_opt = exif::DateTime::from_ascii(&data[..])
                         .map_err(|error| {
-                            tracing::error!(?error, "Failed to read DateTimeOriginal field");
+                            tracing::error!(
+                                ?error,
+                                "Failed to read DateTimeOriginal field"
+                            );
                         })
                         .ok();
                     Ok(dt_opt)
@@ -266,7 +294,9 @@ fn get_date_time_original(exif: &exif::Exif) -> Result<Option<exif::DateTime>, E
     }
 }
 
-fn date_time_exif_to_chrono(dt: &exif::DateTime) -> Option<chrono::NaiveDateTime> {
+fn date_time_exif_to_chrono(
+    dt: &exif::DateTime,
+) -> Option<chrono::NaiveDateTime> {
     let time = chrono::NaiveTime::from_hms_opt(
         u32::from(dt.hour),
         u32::from(dt.minute),
