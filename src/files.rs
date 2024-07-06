@@ -73,13 +73,13 @@ impl File {
         let exists = dst.try_exists()?;
         if exists && src == dst {
             // XXX src should already be canonicalized.
-            tracing::warn!(?src, ?dst, "Identical src and dst. Skipping.");
+            tracing::warn!(?src, ?dst, "Skipping. Identical src and dst.");
             return Ok(());
         }
         if exists && !force {
             tracing::warn!(
                 ?dst,
-                "dst exists, but force overwrite not requested. Skipping."
+                "Skipping. dst exists, but force overwrite not requested."
             );
             return Ok(());
         }
