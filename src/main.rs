@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
+#[command(version, about)]
 struct Cli {
     /// Specify log level, if any.
     #[clap(short, long = "log")]
