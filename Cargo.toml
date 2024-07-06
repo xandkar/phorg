@@ -1,6 +1,6 @@
 [package]
 name = "phorg"
-version = "0.7.0"
+version = "0.8.0"
 description = "Photo files organizer"
 repository = "https://github.com/xandkar/phorg"
 keywords = ["photo", "organizer", "exif"]
@@ -13,6 +13,7 @@ edition = "2021"
 anyhow = { version = "1.0.86", features = ["backtrace"] }
 chrono = "0.4.38"
 clap = { version = "4.5.7", features = ["derive"] }
+crc32fast = "1.4.2"
 infer = "0.16.0"
 kamadak-exif = "0.5.5"
 md-5 = "0.10.6"
