@@ -10,6 +10,6 @@ Given a `<src>` and `<dst>` directories:
 
 1. finds photo-or-video files in `<src>`
 2. fetches their [Exif](https://en.wikipedia.org/wiki/Exif) data
-3. computes their SHA-256 digests
+3. computes their hash digests
 4. moves-or-copies them into
    `<dst>/<year>/<month>/<day>/<date>--<time>--<digest>[.<extension>]`
