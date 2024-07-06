@@ -4,17 +4,292 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub fn find(path: &Path) -> Files {
-    let mut frontier = VecDeque::new();
-    frontier.push_back(path.to_path_buf());
-    Files { frontier }
+use anyhow::Context;
+use rayon::prelude::*;
+
+use crate::hash::Hash;
+
+// TODO Keep clap/CLI-specific stuff out of lib code.
+#[derive(clap::Subcommand, Debug)]
+pub enum Op {
+    /// Dry run. Just print what would be done.
+    Show,
+
+    /// Copy into the directory structure in dst (i.e. preserve the original files in src).
+    Copy,
+
+    /// Move into the directory structure in dst (i.e. remove the original files from src).
+    Move,
 }
 
-pub struct Files {
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum Typ {
+    Image,
+    Video,
+}
+
+type Timestamp = chrono::NaiveDateTime;
+
+#[derive(Debug)]
+struct File {
+    src: PathBuf,
+    dst: PathBuf,
+}
+
+impl File {
+    fn new(
+        src: &Path,
+        _typ: Typ, // May later use in dst determination.
+        ts: Timestamp,
+        hash: Hash,
+        digest: &str,
+    ) -> Self {
+        Self {
+            src: src.to_path_buf(),
+            dst: dst(src, ts, hash.name(), digest),
+        }
+    }
+
+    fn show(&self, dst_root: &Path) {
+        println!("{:?} --> {:?}", self.src, dst_root.join(&self.dst));
+    }
+
+    #[tracing::instrument]
+    fn organize(
+        &self,
+        dst_root: &Path,
+        permanently: bool,
+        force: bool,
+    ) -> anyhow::Result<()> {
+        tracing::info!("Organizing");
+        let src = self.src.as_path();
+        let dst = dst_root.join(&self.dst);
+        if let Some(dst_parent) = dst.parent() {
+            fs::create_dir_all(dst_parent).context(format!(
+                "Failed to create parent dir: {:?}",
+                dst_parent
+            ))?;
+        }
+        let exists = dst.try_exists()?;
+        if exists && src == dst {
+            // XXX src should already be canonicalized.
+            tracing::warn!(?src, ?dst, "Identical src and dst. Skipping.");
+            return Ok(());
+        }
+        if exists && !force {
+            tracing::warn!(
+                ?dst,
+                "dst exists, but force overwrite not requested. Skipping."
+            );
+            return Ok(());
+        }
+        if permanently {
+            tracing::info!("Moving");
+            fs::rename(src, &dst).context(format!(
+                "Failed to rename file. src={:?}. dst={:?}",
+                src, &dst
+            ))?;
+        } else {
+            tracing::info!("Copying");
+            fs::copy(src, &dst).context(format!(
+                "Failed to copy file. src={:?}. dst={:?}",
+                src, &dst
+            ))?;
+        }
+        Ok(())
+    }
+}
+
+#[tracing::instrument]
+fn files(
+    root: &Path,
+    ty_wanted: Typ,
+    hash: Hash,
+) -> impl rayon::iter::ParallelIterator<Item = File> {
+    FilePaths::find(root)
+        .par_bridge()
+        .filter_map(|p| read_type(&p).map(|t| (p, t)))
+        .filter_map(move |(path, ty_found)| {
+            tracing::debug!(?path, ?ty_wanted, ?ty_found, "Type filter");
+            match (ty_found, ty_wanted) {
+                (infer::MatcherType::Image, Typ::Image)
+                | (infer::MatcherType::Video, Typ::Video) => {
+                    Some((path, ty_wanted))
+                }
+                _ => None,
+            }
+        })
+        .filter_map(move |(path, typ)| {
+            read_timestamp(&path, typ)
+                .ok()
+                .flatten()
+                .map(|timestamp| (path, typ, timestamp))
+        })
+        .filter_map(move |(path, typ, timestamp)| {
+            hash.digest(&path)
+                .ok()
+                .map(|digest| (path, typ, timestamp, digest))
+        })
+        .map(move |(path, typ, timestamp, digest)| {
+            File::new(&path, typ, timestamp, hash, &digest)
+        })
+}
+
+fn read_type(path: &Path) -> Option<infer::MatcherType> {
+    infer::get_from_path(path)
+        .map_err(|error| {
+            tracing::error!(?path, ?error, "Failed to read file.");
+        })
+        .ok()
+        .flatten()
+        .map(|typ| typ.matcher_type())
+}
+
+#[tracing::instrument(skip_all)]
+pub fn organize(
+    src_root: &Path,
+    dst_root: &Path,
+    op: &Op,
+    ty_wanted: Typ,
+    force: bool,
+    hash: Hash,
+) -> anyhow::Result<()> {
+    tracing::info!(?op, ?src_root, ?dst_root, "Starting");
+    let src_root = src_root.canonicalize().context(format!(
+        "Failed to canonicalize src path: {:?}",
+        src_root
+    ))?;
+    if !dst_root.try_exists().context(format!(
+        "Failed to check existence of dst path: {:?}",
+        &dst_root
+    ))? {
+        tracing::info!(path = ?dst_root, "Dst dir does not exist. Creating.");
+        fs::create_dir_all(dst_root)
+            .context(format!("Failed to create dst dir: {:?}", dst_root))?;
+    }
+    let dst_root = dst_root.canonicalize().context(format!(
+        "Failed to canonicalize dst path: {:?}",
+        dst_root
+    ))?;
+    tracing::info!(?src_root, ?dst_root, "Canonicalized");
+    files(&src_root, ty_wanted, hash).for_each(|photo| {
+        let result = match op {
+            Op::Show => {
+                photo.show(&dst_root);
+                Ok(())
+            }
+            Op::Copy => photo.organize(&dst_root, false, force),
+            Op::Move => photo.organize(&dst_root, true, force),
+        };
+        if let Err(error) = result {
+            tracing::error!(?error, ?photo, "Failed to organize");
+        }
+    });
+    tracing::info!("Finished");
+    Ok(())
+}
+
+// Ref: exif::tag::d_datetime (private).
+fn get_date_time_original(exif: &exif::Exif) -> Option<exif::DateTime> {
+    exif.get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+        .and_then(|field| match &field.value {
+            exif::Value::Ascii(data) => Some(data),
+            _ => None,
+        })
+        .and_then(|data| data.first())
+        .and_then(|data| exif::DateTime::from_ascii(data).ok())
+}
+
+fn date_time_exif_to_chrono(
+    dt: &exif::DateTime,
+) -> Option<chrono::NaiveDateTime> {
+    let time = chrono::NaiveTime::from_hms_opt(
+        u32::from(dt.hour),
+        u32::from(dt.minute),
+        u32::from(dt.second),
+    )?;
+    let date = chrono::NaiveDate::from_ymd_opt(
+        i32::from(dt.year),
+        u32::from(dt.month),
+        u32::from(dt.day),
+    )?;
+    Some(chrono::NaiveDateTime::new(date, time))
+}
+
+fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
+    use chrono::{Datelike, Timelike}; // Access timestamp fields.
+
+    let year = format!("{:02}", ts.year());
+    let month = format!("{:02}", ts.month());
+    let day = format!("{:02}", ts.day());
+    let hour = format!("{:02}", ts.hour());
+    let minute = format!("{:02}", ts.minute());
+    let second = format!("{:02}", ts.second());
+
+    let stem = [
+        [year.as_str(), month.as_str(), day.as_str()].join("-"),
+        [hour, minute, second].join(":"),
+        [hash_name, digest].join(":"),
+    ]
+    .join("--");
+
+    let extension = src.extension().unwrap_or_default();
+    let name = PathBuf::from(stem).with_extension(extension);
+    let dir: PathBuf = [year, month, day].iter().collect();
+    dir.join(name)
+}
+
+fn read_timestamp(
+    path: &Path,
+    typ: Typ,
+) -> anyhow::Result<Option<Timestamp>> {
+    let file = fs::File::open(path)?;
+    let timestamp = match typ {
+        Typ::Image => read_timestamp_img(&file),
+        Typ::Video => read_timestamp_vid(&file),
+    };
+    Ok(timestamp)
+}
+
+fn read_timestamp_img(file: &fs::File) -> Option<Timestamp> {
+    let mut bufreader = std::io::BufReader::new(file);
+    exif::Reader::new()
+        .read_from_container(&mut bufreader)
+        .ok()
+        .and_then(|exif| {
+            get_date_time_original(&exif)
+                .as_ref()
+                .and_then(date_time_exif_to_chrono)
+        })
+}
+
+fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
+    nom_exif::parse_metadata(file).ok().and_then(|pairs| {
+        pairs
+            .iter()
+            .find(|(k, _)| k == "com.apple.quicktime.creationdate")
+            .map(|(_, v)| v)
+            .and_then(|entry| match entry {
+                nom_exif::EntryValue::Time(t) => Some(t),
+                _ => None,
+            })
+            .map(|t| t.naive_local())
+    })
+}
+
+struct FilePaths {
     frontier: VecDeque<PathBuf>,
 }
 
-impl Iterator for Files {
+impl FilePaths {
+    fn find(root: &Path) -> Self {
+        let mut frontier = VecDeque::new();
+        frontier.push_back(root.to_path_buf());
+        Self { frontier }
+    }
+}
+
+impl Iterator for FilePaths {
     type Item = PathBuf;
 
     fn next(&mut self) -> Option<Self::Item> {

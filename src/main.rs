@@ -8,28 +8,39 @@ struct Cli {
     #[clap(short, long = "log")]
     log_level: Option<tracing::Level>,
 
+    /// Hash.
+    #[clap(long, value_enum, default_value_t = phorg::hash::Hash::default())]
+    hash: phorg::hash::Hash,
+
     /// Overwrite existing files.
     #[clap(short = 'f', long = "force", default_value_t = false)]
     force: bool,
 
     /// Type of files to filter for.
-    #[clap(short, long = "type", name = "TYPE", value_enum, default_value_t = phorg::Typ::Image)]
-    typ: phorg::Typ,
+    #[clap(short, long = "type", name = "TYPE", value_enum, default_value_t = phorg::files::Typ::Image)]
+    typ: phorg::files::Typ,
 
     /// Where to look for photo/video files.
-    src: PathBuf,
+    src_root: PathBuf,
 
     /// Where to create directory structure with found photo/video files.
-    dst: PathBuf,
+    dst_root: PathBuf,
 
     /// What to do with the found photo files.
     #[clap(subcommand)]
-    op: phorg::Op,
+    op: phorg::files::Op,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     phorg::tracing_init(cli.log_level)?;
-    phorg::photos::organize(&cli.src, &cli.dst, &cli.op, cli.typ, cli.force)?;
+    phorg::files::organize(
+        &cli.src_root,
+        &cli.dst_root,
+        &cli.op,
+        cli.typ,
+        cli.force,
+        cli.hash,
+    )?;
     Ok(())
 }
