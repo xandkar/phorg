@@ -172,17 +172,17 @@ pub fn organize(
         dst_root
     ))?;
     tracing::info!(?src_root, ?dst_root, "Canonicalized");
-    files(&src_root, ty_wanted, hash).for_each(|photo| {
+    files(&src_root, ty_wanted, hash).for_each(|file| {
         let result = match op {
             Op::Show => {
-                photo.show(&dst_root);
+                file.show(&dst_root);
                 Ok(())
             }
-            Op::Copy => photo.organize(&dst_root, false, force),
-            Op::Move => photo.organize(&dst_root, true, force),
+            Op::Copy => file.organize(&dst_root, false, force),
+            Op::Move => file.organize(&dst_root, true, force),
         };
         if let Err(error) = result {
-            tracing::error!(?error, ?photo, "Failed to organize");
+            tracing::error!(?error, ?file, "Failed to organize");
         }
     });
     tracing::info!("Finished");
