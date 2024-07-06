@@ -233,7 +233,7 @@ fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
     ]
     .join("--");
 
-    let extension = src.extension().unwrap_or_default();
+    let extension = src.extension().unwrap_or_default().to_ascii_lowercase();
     let name = PathBuf::from(stem).with_extension(extension);
     let dir: PathBuf = [year, month, day].iter().collect();
     dir.join(name)
