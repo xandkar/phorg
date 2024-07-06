@@ -92,6 +92,6 @@ fn digest_crc32<P: AsRef<Path>>(path: P) -> io::Result<String> {
         hash.update(&buff[..n]);
     }
     let digest = hash.finalize();
-    let hex = format!("{:x}", digest);
+    let hex = format!("{:08x}", digest);
     Ok(hex)
 }
