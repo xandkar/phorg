@@ -104,6 +104,7 @@ impl File {
 fn files(
     root: &Path,
     ty_wanted: Typ,
+    use_exiftool: bool,
     hash: Hash,
 ) -> impl rayon::iter::ParallelIterator<Item = File> {
     FilePaths::find(root)
@@ -120,7 +121,7 @@ fn files(
             }
         })
         .filter_map(move |(path, typ)| {
-            read_timestamp(&path, typ)
+            read_timestamp(&path, typ, use_exiftool)
                 .ok()
                 .flatten()
                 .map(|timestamp| (path, typ, timestamp))
@@ -152,6 +153,7 @@ pub fn organize(
     op: &Op,
     ty_wanted: Typ,
     force: bool,
+    use_exiftool: bool,
     hash: Hash,
 ) -> anyhow::Result<()> {
     tracing::info!(?op, ?src_root, ?dst_root, "Starting");
@@ -172,7 +174,7 @@ pub fn organize(
         dst_root
     ))?;
     tracing::info!(?src_root, ?dst_root, "Canonicalized");
-    files(&src_root, ty_wanted, hash).for_each(|file| {
+    files(&src_root, ty_wanted, use_exiftool, hash).for_each(|file| {
         let result = match op {
             Op::Show => {
                 file.show(&dst_root);
@@ -242,12 +244,18 @@ fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
 fn read_timestamp(
     path: &Path,
     typ: Typ,
+    use_exiftool: bool,
 ) -> anyhow::Result<Option<Timestamp>> {
     let file = fs::File::open(path)?;
-    let timestamp = match typ {
+    let timestamp: Option<Timestamp> = match typ {
         Typ::Image => read_timestamp_img(&file),
         Typ::Video => read_timestamp_vid(&file),
-    };
+    }
+    .or_else(|| {
+        use_exiftool
+            .then(|| read_timestamp_with_exiftool(path))
+            .flatten()
+    });
     Ok(timestamp)
 }
 
@@ -275,6 +283,59 @@ fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
             })
             .map(|t| t.naive_local())
     })
+}
+
+#[derive(serde::Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+struct ExifToolFields {
+    #[serde(rename = "SourceFile")]
+    _source_file: String,
+
+    #[serde(deserialize_with = "exiftool_parse_create_date")]
+    create_date: Timestamp,
+}
+
+fn exiftool_parse_create_date<'de, D>(
+    deserializer: D,
+) -> Result<Timestamp, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let str = serde::Deserialize::deserialize(deserializer)?;
+    let fmt = "%Y:%m:%d %H:%M:%S";
+    chrono::NaiveDateTime::parse_from_str(str, fmt)
+        .map_err(serde::de::Error::custom)
+}
+
+fn read_timestamp_with_exiftool(path: &Path) -> Option<Timestamp> {
+    let path = path.as_os_str().to_string_lossy().to_string();
+    let out = cmd("exiftool", &["-json", "-CreateDate", &path])?;
+    let mut fields_vec =
+        serde_json::from_slice::<Vec<ExifToolFields>>(&out[..]).ok()?;
+    if fields_vec.len() > 1 {
+        tracing::warn!(
+            ?fields_vec,
+            "exiftool outputted more than 1 fields object"
+        );
+    }
+    let fields = fields_vec.pop()?;
+    Some(fields.create_date)
+}
+
+fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
+    let out = std::process::Command::new(exe).args(args).output().ok()?;
+    if out.status.success() {
+        Some(out.stdout)
+    } else {
+        tracing::error!(
+            ?exe,
+            ?args,
+            ?out,
+            stderr = ?String::from_utf8_lossy(&out.stderr[..]),
+            "Failed to execute command."
+        );
+        None
+    }
 }
 
 struct FilePaths {

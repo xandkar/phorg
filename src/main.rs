@@ -17,6 +17,10 @@ struct Cli {
     #[clap(short = 'f', long = "force", default_value_t = false)]
     force: bool,
 
+    /// Don't try falling back on exiftool if we fail to extract Exif data directly.
+    #[clap(long, default_value_t = false)]
+    no_exiftool: bool,
+
     /// Type of files to filter for.
     #[clap(short, long = "type", name = "TYPE", value_enum, default_value_t = phorg::files::Typ::Image)]
     typ: phorg::files::Typ,
@@ -35,12 +39,14 @@ struct Cli {
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     phorg::tracing_init(Some(cli.log_level))?;
+    let use_exiftool = !cli.no_exiftool;
     phorg::files::organize(
         &cli.src_root,
         &cli.dst_root,
         &cli.op,
         cli.typ,
         cli.force,
+        use_exiftool,
         cli.hash,
     )?;
     Ok(())
