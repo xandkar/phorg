@@ -6,8 +6,8 @@ use clap::Parser;
 #[command(version, about)]
 struct Cli {
     /// Specify log level, if any.
-    #[clap(short, long = "log")]
-    log_level: Option<tracing::Level>,
+    #[clap(short, long = "log", default_value_t = tracing::Level::WARN)]
+    log_level: tracing::Level,
 
     /// Hash.
     #[clap(long, value_enum, default_value_t = phorg::hash::Hash::default())]
@@ -34,7 +34,7 @@ struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    phorg::tracing_init(cli.log_level)?;
+    phorg::tracing_init(Some(cli.log_level))?;
     phorg::files::organize(
         &cli.src_root,
         &cli.dst_root,
