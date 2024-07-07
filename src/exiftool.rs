@@ -55,6 +55,13 @@ struct Fields {
         default
     )]
     track_create_date: Option<Timestamp>,
+
+    #[serde(
+        rename = "FileModifyDate",
+        deserialize_with = "exiftool_parse_date",
+        default
+    )]
+    file_modify_date: Option<Timestamp>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -99,6 +106,7 @@ pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
         date_time_created,
         date_time_original,
         track_create_date,
+        file_modify_date,
     } = fields_vec.pop()?;
     date_time_original
         .or(date_time_created)
@@ -107,6 +115,7 @@ pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
         .or(date_create)
         .or(creation_date)
         .or(track_create_date)
+        .or(file_modify_date)
 }
 
 fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
