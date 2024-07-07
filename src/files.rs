@@ -139,8 +139,12 @@ fn files(
 #[tracing::instrument]
 fn read_type(path: &Path) -> Option<infer::MatcherType> {
     infer::get_from_path(path)
+        .map(|matcher_type| {
+            tracing::debug!(?matcher_type, "Read");
+            matcher_type
+        })
         .map_err(|error| {
-            tracing::error!(?error, "Failed to read file.");
+            tracing::error!(?error, "Failed");
         })
         .ok()
         .flatten()
