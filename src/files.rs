@@ -22,10 +22,10 @@ pub enum Op {
     Move,
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, clap::ValueEnum)]
 pub enum Typ {
-    Image,
-    Video,
+    Img,
+    Vid,
 }
 
 pub type Timestamp = chrono::NaiveDateTime;
@@ -39,14 +39,16 @@ struct File {
 impl File {
     fn new(
         src: &Path,
-        _typ: Typ, // May later use in dst determination.
+        typ: Typ,
+        img_dir: &str,
+        vid_dir: &str,
         ts: Timestamp,
         hash: Hash,
         digest: &str,
     ) -> Self {
         Self {
             src: src.to_path_buf(),
-            dst: dst(src, ts, hash.name(), digest),
+            dst: dst(src, typ, img_dir, vid_dir, ts, hash.name(), digest),
         }
     }
 
@@ -101,23 +103,25 @@ impl File {
 }
 
 #[tracing::instrument]
-fn files(
-    root: &Path,
-    ty_wanted: Typ,
+fn files<'a>(
+    root: &'a Path,
+    img_dir: &'a str,
+    vid_dir: &'a str,
+    ty_filter: Option<Typ>,
     use_exiftool: bool,
     hash: Hash,
-) -> impl rayon::iter::ParallelIterator<Item = File> {
+) -> impl rayon::iter::ParallelIterator<Item = File> + 'a {
     FilePaths::find(root)
         .par_bridge()
         .filter_map(|p| read_type(&p).map(|t| (p, t)))
         .filter_map(move |(path, ty_found)| {
-            tracing::debug!(?path, ?ty_wanted, ?ty_found, "Type filter");
-            match (ty_found, ty_wanted) {
-                (infer::MatcherType::Image, Typ::Image)
-                | (infer::MatcherType::Video, Typ::Video) => {
-                    Some((path, ty_wanted))
+            tracing::debug!(?path, ?ty_filter, ?ty_found, "Type filter");
+            match ty_filter {
+                Some(ty_filter) if ty_filter == ty_found => {
+                    Some((path, ty_found))
                 }
-                _ => None,
+                None => Some((path, ty_found)),
+                Some(_) => None,
             }
         })
         .filter_map(move |(path, typ)| {
@@ -132,31 +136,39 @@ fn files(
                 .map(|digest| (path, typ, timestamp, digest))
         })
         .map(move |(path, typ, timestamp, digest)| {
-            File::new(&path, typ, timestamp, hash, &digest)
+            File::new(&path, typ, img_dir, vid_dir, timestamp, hash, &digest)
         })
 }
 
 #[tracing::instrument]
-fn read_type(path: &Path) -> Option<infer::MatcherType> {
+fn read_type(path: &Path) -> Option<Typ> {
     infer::get_from_path(path)
-        .map(|matcher_type| {
-            tracing::debug!(?matcher_type, "Read");
-            matcher_type
+        .map(|matcher_type_opt| {
+            tracing::debug!(?matcher_type_opt, "Read");
+            matcher_type_opt.map(|typ| typ.matcher_type()).and_then(
+                |matcher_type| match matcher_type {
+                    infer::MatcherType::Image => Some(Typ::Img),
+                    infer::MatcherType::Video => Some(Typ::Vid),
+                    _ => None,
+                },
+            )
         })
         .map_err(|error| {
             tracing::error!(?error, "Failed");
         })
         .ok()
         .flatten()
-        .map(|typ| typ.matcher_type())
 }
 
+#[allow(clippy::too_many_arguments)] // TODO Remove, after combining args.
 #[tracing::instrument(skip_all)]
-pub fn organize(
-    src_root: &Path,
-    dst_root: &Path,
+pub fn organize<'a>(
+    src_root: &'a Path,
+    dst_root: &'a Path,
     op: &Op,
-    ty_wanted: Typ,
+    img_dir: &'a str,
+    vid_dir: &'a str,
+    ty_filter: Option<Typ>,
     force: bool,
     use_exiftool: bool,
     hash: Hash,
@@ -179,19 +191,20 @@ pub fn organize(
         dst_root
     ))?;
     tracing::info!(?src_root, ?dst_root, "Canonicalized");
-    files(&src_root, ty_wanted, use_exiftool, hash).for_each(|file| {
-        let result = match op {
-            Op::Show => {
-                file.show(&dst_root);
-                Ok(())
+    files(&src_root, img_dir, vid_dir, ty_filter, use_exiftool, hash)
+        .for_each(|file| {
+            let result = match op {
+                Op::Show => {
+                    file.show(&dst_root);
+                    Ok(())
+                }
+                Op::Copy => file.organize(&dst_root, false, force),
+                Op::Move => file.organize(&dst_root, true, force),
+            };
+            if let Err(error) = result {
+                tracing::error!(?error, ?file, "Failed to organize");
             }
-            Op::Copy => file.organize(&dst_root, false, force),
-            Op::Move => file.organize(&dst_root, true, force),
-        };
-        if let Err(error) = result {
-            tracing::error!(?error, ?file, "Failed to organize");
-        }
-    });
+        });
     tracing::info!("Finished");
     Ok(())
 }
@@ -223,7 +236,15 @@ fn date_time_exif_to_chrono(
     Some(chrono::NaiveDateTime::new(date, time))
 }
 
-fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
+fn dst(
+    src: &Path,
+    typ: Typ,
+    img_dir: &str,
+    vid_dir: &str,
+    ts: Timestamp,
+    hash_name: &str,
+    digest: &str,
+) -> PathBuf {
     use chrono::{Datelike, Timelike}; // Access timestamp fields.
 
     let year = format!("{:02}", ts.year());
@@ -242,7 +263,11 @@ fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
 
     let extension = src.extension().unwrap_or_default().to_ascii_lowercase();
     let name = PathBuf::from(stem).with_extension(extension);
-    let dir: PathBuf = [year, month, day].iter().collect();
+    let typ_dir = match typ {
+        Typ::Img => img_dir,
+        Typ::Vid => vid_dir,
+    };
+    let dir: PathBuf = [typ_dir, &year, &month, &day].iter().collect();
     dir.join(name)
 }
 
@@ -254,8 +279,8 @@ fn read_timestamp(
 ) -> anyhow::Result<Option<Timestamp>> {
     let file = fs::File::open(path)?;
     let timestamp: Option<Timestamp> = match typ {
-        Typ::Image => read_timestamp_img(&file),
-        Typ::Video => read_timestamp_vid(&file),
+        Typ::Img => read_timestamp_img(&file),
+        Typ::Vid => read_timestamp_vid(&file),
     }
     .or_else(|| {
         use_exiftool

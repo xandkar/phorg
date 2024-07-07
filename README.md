@@ -12,7 +12,9 @@ Given a `<src>` and `<dst>` directories:
 2. fetches their [Exif](https://en.wikipedia.org/wiki/Exif) data
 3. computes their hash digests
 4. moves-or-copies them into
-   `<dst>/<year>/<month>/<day>/<date>--<time>--<digest>[.<extension>]`
+   `<dst>/{<img-dir>,<vid-dir>}/<year>/<month>/<day>/<date>--<time>--<digest>[.<extension>]`
+   where `<img-dir>` and `<vid-dir>` default to "img" and "vid", respectively,
+   and are customizable via CLI.
 
 Example:
 
