@@ -136,10 +136,11 @@ fn files(
         })
 }
 
+#[tracing::instrument]
 fn read_type(path: &Path) -> Option<infer::MatcherType> {
     infer::get_from_path(path)
         .map_err(|error| {
-            tracing::error!(?path, ?error, "Failed to read file.");
+            tracing::error!(?error, "Failed to read file.");
         })
         .ok()
         .flatten()
@@ -241,6 +242,7 @@ fn dst(src: &Path, ts: Timestamp, hash_name: &str, digest: &str) -> PathBuf {
     dir.join(name)
 }
 
+#[tracing::instrument]
 fn read_timestamp(
     path: &Path,
     typ: Typ,
@@ -256,6 +258,7 @@ fn read_timestamp(
             .then(|| read_timestamp_with_exiftool(path))
             .flatten()
     });
+    tracing::debug!(?timestamp, "Finished");
     Ok(timestamp)
 }
 
@@ -291,27 +294,41 @@ struct ExifToolFields {
     #[serde(rename = "SourceFile")]
     _source_file: String,
 
-    #[serde(deserialize_with = "exiftool_parse_create_date")]
-    create_date: Timestamp,
+    #[serde(deserialize_with = "exiftool_parse_date", default)]
+    create_date: Option<Timestamp>,
+
+    #[serde(deserialize_with = "exiftool_parse_date", default)]
+    date_created: Option<Timestamp>,
 }
 
-fn exiftool_parse_create_date<'de, D>(
+#[tracing::instrument(skip_all)]
+fn exiftool_parse_date<'de, D>(
     deserializer: D,
-) -> Result<Timestamp, D::Error>
+) -> Result<Option<Timestamp>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let str = serde::Deserialize::deserialize(deserializer)?;
+    use serde::Deserialize;
+
     let fmt = "%Y:%m:%d %H:%M:%S";
-    chrono::NaiveDateTime::parse_from_str(str, fmt)
-        .map_err(serde::de::Error::custom)
+    match Option::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(str) => chrono::NaiveDateTime::parse_from_str(str, fmt)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
 }
 
+#[tracing::instrument(skip_all)]
 fn read_timestamp_with_exiftool(path: &Path) -> Option<Timestamp> {
     let path = path.as_os_str().to_string_lossy().to_string();
-    let out = cmd("exiftool", &["-json", "-CreateDate", &path])?;
-    let mut fields_vec =
-        serde_json::from_slice::<Vec<ExifToolFields>>(&out[..]).ok()?;
+    let out =
+        cmd("exiftool", &["-json", "-CreateDate", "-DateCreated", &path])?;
+    tracing::debug!(out = ?String::from_utf8_lossy(&out[..]), "Output raw");
+    let parse_result =
+        serde_json::from_slice::<Vec<ExifToolFields>>(&out[..]);
+    tracing::debug!(?parse_result, "Output parsed");
+    let mut fields_vec = parse_result.ok()?;
     if fields_vec.len() > 1 {
         tracing::warn!(
             ?fields_vec,
@@ -319,7 +336,7 @@ fn read_timestamp_with_exiftool(path: &Path) -> Option<Timestamp> {
         );
     }
     let fields = fields_vec.pop()?;
-    Some(fields.create_date)
+    fields.create_date.or(fields.date_created)
 }
 
 fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
