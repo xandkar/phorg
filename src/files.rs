@@ -7,7 +7,7 @@ use std::{
 use anyhow::Context;
 use rayon::prelude::*;
 
-use crate::hash::Hash;
+use crate::{exiftool, hash::Hash};
 
 // TODO Keep clap/CLI-specific stuff out of lib code.
 #[derive(clap::Subcommand, Debug)]
@@ -28,7 +28,7 @@ pub enum Typ {
     Video,
 }
 
-type Timestamp = chrono::NaiveDateTime;
+pub type Timestamp = chrono::NaiveDateTime;
 
 #[derive(Debug)]
 struct File {
@@ -255,7 +255,7 @@ fn read_timestamp(
     }
     .or_else(|| {
         use_exiftool
-            .then(|| read_timestamp_with_exiftool(path))
+            .then(|| exiftool::read_timestamp(path))
             .flatten()
     });
     tracing::debug!(?timestamp, "Finished");
@@ -286,73 +286,6 @@ fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
             })
             .map(|t| t.naive_local())
     })
-}
-
-#[derive(serde::Deserialize, Debug)]
-#[serde(rename_all = "PascalCase")]
-struct ExifToolFields {
-    #[serde(rename = "SourceFile")]
-    _source_file: String,
-
-    #[serde(deserialize_with = "exiftool_parse_date", default)]
-    create_date: Option<Timestamp>,
-
-    #[serde(deserialize_with = "exiftool_parse_date", default)]
-    date_created: Option<Timestamp>,
-}
-
-#[tracing::instrument(skip_all)]
-fn exiftool_parse_date<'de, D>(
-    deserializer: D,
-) -> Result<Option<Timestamp>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
-
-    let fmt = "%Y:%m:%d %H:%M:%S";
-    match Option::deserialize(deserializer)? {
-        None => Ok(None),
-        Some(str) => chrono::NaiveDateTime::parse_from_str(str, fmt)
-            .map(Some)
-            .map_err(serde::de::Error::custom),
-    }
-}
-
-#[tracing::instrument(skip_all)]
-fn read_timestamp_with_exiftool(path: &Path) -> Option<Timestamp> {
-    let path = path.as_os_str().to_string_lossy().to_string();
-    let out =
-        cmd("exiftool", &["-json", "-CreateDate", "-DateCreated", &path])?;
-    tracing::debug!(out = ?String::from_utf8_lossy(&out[..]), "Output raw");
-    let parse_result =
-        serde_json::from_slice::<Vec<ExifToolFields>>(&out[..]);
-    tracing::debug!(?parse_result, "Output parsed");
-    let mut fields_vec = parse_result.ok()?;
-    if fields_vec.len() > 1 {
-        tracing::warn!(
-            ?fields_vec,
-            "exiftool outputted more than 1 fields object"
-        );
-    }
-    let fields = fields_vec.pop()?;
-    fields.create_date.or(fields.date_created)
-}
-
-fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
-    let out = std::process::Command::new(exe).args(args).output().ok()?;
-    if out.status.success() {
-        Some(out.stdout)
-    } else {
-        tracing::error!(
-            ?exe,
-            ?args,
-            ?out,
-            stderr = ?String::from_utf8_lossy(&out.stderr[..]),
-            "Failed to execute command."
-        );
-        None
-    }
 }
 
 struct FilePaths {

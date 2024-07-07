@@ -1,6 +1,8 @@
 pub mod files;
 pub mod hash;
 
+mod exiftool;
+
 pub fn tracing_init(level: Option<tracing::Level>) -> anyhow::Result<()> {
     use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Layer};
 
