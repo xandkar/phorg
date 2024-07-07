@@ -61,7 +61,7 @@ struct Fields {
         deserialize_with = "exiftool_parse_date",
         default
     )]
-    file_modify_date: Option<Timestamp>,
+    _file_modify_date: Option<Timestamp>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -74,19 +74,26 @@ where
     use serde::Deserialize;
 
     let fmt = "%Y:%m:%d %H:%M:%S";
-    match Option::deserialize(deserializer)? {
+    // Take an owned string so we can modify it bellow:
+    let str_opt: Option<String> = Option::deserialize(deserializer)?;
+    match str_opt {
         None => Ok(None),
-        Some(str) => chrono::NaiveDateTime::parse_from_str(str, fmt)
-            .map(Some)
-            .map_err(serde::de::Error::custom),
+        Some(mut s) => {
+            // Drop timezone if it is present:
+            if let Some(pos) = s.find(&['+', '-']) {
+                s.truncate(pos)
+            }
+            chrono::NaiveDateTime::parse_from_str(&s, fmt)
+                .map(Some)
+                .map_err(serde::de::Error::custom)
+        }
     }
 }
 
 #[tracing::instrument(skip_all)]
 pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
     let path = path.as_os_str().to_string_lossy().to_string();
-    let out =
-        cmd("exiftool", &["-json", "-CreateDate", "-DateCreated", &path])?;
+    let out = cmd("exiftool", &["-json", &path])?;
     tracing::debug!(out = ?String::from_utf8_lossy(&out[..]), "Output raw");
     let parse_result = serde_json::from_slice::<Vec<Fields>>(&out[..]);
     tracing::debug!(?parse_result, "Output parsed");
@@ -106,7 +113,7 @@ pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
         date_time_created,
         date_time_original,
         track_create_date,
-        file_modify_date,
+        _file_modify_date,
     } = fields_vec.pop()?;
     date_time_original
         .or(date_time_created)
@@ -115,7 +122,6 @@ pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
         .or(date_create)
         .or(creation_date)
         .or(track_create_date)
-        .or(file_modify_date)
 }
 
 fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
