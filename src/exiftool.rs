@@ -80,8 +80,8 @@ where
         None => Ok(None),
         Some(mut s) => {
             // Drop timezone if it is present:
-            if let Some(pos) = s.find(&['+', '-']) {
-                s.truncate(pos)
+            if let Some(pos) = s.find(['+', '-']) {
+                s.truncate(pos);
             }
             chrono::NaiveDateTime::parse_from_str(&s, fmt)
                 .map(Some)
