@@ -1,4 +1,7 @@
-use std::{io, path::Path};
+use std::{
+    io::{self, Read},
+    path::Path,
+};
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum Hash {
@@ -25,11 +28,12 @@ impl Hash {
     }
 
     pub fn digest(&self, path: &Path) -> io::Result<String> {
+        let mut file = std::fs::File::open(path)?;
         match self {
-            Hash::Sha1 => digest_sha1(path),
-            Hash::Sha256 => digest_sha256(path),
-            Hash::Md5 => digest_md5(path),
-            Hash::Crc32 => digest_crc32(path),
+            Hash::Sha1 => digest_sha1(&mut file),
+            Hash::Sha256 => digest_sha256(&mut file),
+            Hash::Md5 => digest_md5(&mut file),
+            Hash::Crc32 => digest_crc32(&mut file),
         }
         .map_err(|error| {
             tracing::error!(?path, algo = ?self, ?error, "Failed to hash file");
@@ -38,17 +42,13 @@ impl Hash {
     }
 }
 
-fn digest_sha1<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    use std::io::Read;
-
+fn digest_sha1<R: Read>(data: &mut R) -> io::Result<String> {
     use sha1::{Digest, Sha1};
 
-    let path = path.as_ref();
-    let mut file = std::fs::File::open(path)?;
-    let mut hash = Sha1::default();
+    let mut hash = Sha1::new();
     let mut buff = [0; 1024];
     loop {
-        let n = file.read(&mut buff)?;
+        let n = data.read(&mut buff)?;
         if n == 0 {
             break;
         }
@@ -59,17 +59,13 @@ fn digest_sha1<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(hex)
 }
 
-fn digest_sha256<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    use std::io::Read;
-
+fn digest_sha256<R: Read>(data: &mut R) -> io::Result<String> {
     use sha2::{Digest, Sha256};
 
-    let path = path.as_ref();
-    let mut file = std::fs::File::open(path)?;
-    let mut hash = Sha256::default();
+    let mut hash = Sha256::new();
     let mut buff = [0; 1024];
     loop {
-        let n = file.read(&mut buff)?;
+        let n = data.read(&mut buff)?;
         if n == 0 {
             break;
         }
@@ -80,17 +76,13 @@ fn digest_sha256<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(hex)
 }
 
-fn digest_md5<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    use std::io::Read;
-
+fn digest_md5<R: Read>(data: &mut R) -> io::Result<String> {
     use md5::{Digest, Md5};
 
-    let path = path.as_ref();
-    let mut file = std::fs::File::open(path)?;
     let mut hash = Md5::new();
     let mut buff = [0; 1024];
     loop {
-        let n = file.read(&mut buff)?;
+        let n = data.read(&mut buff)?;
         if n == 0 {
             break;
         }
@@ -101,15 +93,11 @@ fn digest_md5<P: AsRef<Path>>(path: P) -> io::Result<String> {
     Ok(hex)
 }
 
-fn digest_crc32<P: AsRef<Path>>(path: P) -> io::Result<String> {
-    use std::io::Read;
-
-    let path = path.as_ref();
-    let mut file = std::fs::File::open(path)?;
+fn digest_crc32<R: Read>(data: &mut R) -> io::Result<String> {
     let mut hash = crc32fast::Hasher::new();
     let mut buff = [0; 1024];
     loop {
-        let n = file.read(&mut buff)?;
+        let n = data.read(&mut buff)?;
         if n == 0 {
             break;
         }
