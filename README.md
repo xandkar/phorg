@@ -1,10 +1,13 @@
 phorg
 ===============================================================================
 
+Idempotent photo/video file organizer.
+
 [![test status](https://github.com/xandkar/phorg/actions/workflows/test.yml/badge.svg)](https://github.com/xandkar/phorg/actions)
 [![dependencies status](https://deps.rs/repo/github/xandkar/phorg/status.svg)](https://deps.rs/repo/github/xandkar/phorg)
 
-Idempotent photo/video file organizer.
+Overview
+-------------------------------------------------------------------------------
 
 Given a `<src>` and `<dst>` directories:
 
@@ -17,7 +20,7 @@ Given a `<src>` and `<dst>` directories:
     - `<img>` and `<vid>` default to "img" and "vid", respectively, and are
       customizable via CLI
     - date and time are extracted from Exif metadata, from whichever of the
-      follwoing tags is found first, tried in order:
+      following tags is found first, tried in order:
       + `DateTimeOriginal`
       + `DateTimeCreated`
       + `CreateDate`
@@ -25,8 +28,15 @@ Given a `<src>` and `<dst>` directories:
       + `Datecreate`
       + `CreationDate`
       + `TrackCreateDate`
+5. optionally, you can (manually) add semantically-named subdirectories
+   underneath the `<day>` directory and (manually) move the media files into
+   them, these subdirectories will then be preserved on subsequent
+   reprocessing, i.e. when this `<dst>` is later used as `<src>`
 
-Example:
+Example
+-------------------------------------------------------------------------------
+
+(note the semantic subdirectory on 2020-11-29)
 
 ```sh
 $ phorg /mnt/usb-drive $dst move
