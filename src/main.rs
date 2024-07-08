@@ -21,6 +21,12 @@ struct Cli {
     #[clap(long, default_value_t = false)]
     no_exiftool: bool,
 
+    /// Show progress bar (when copying or moving, but never when showing).
+    /// NOTE: May conflict with logging output, so may need to set the log
+    /// level to error to avoid screen noise.
+    #[clap(short = 'p', long = "progress", default_value_t = false)]
+    show_progress: bool,
+
     /// Process only this file type, otherwise all supported will be processed.
     #[clap(short, long = "type", name = "TYPE", value_enum)]
     typ: Option<phorg::files::Typ>,
@@ -57,6 +63,7 @@ fn main() -> anyhow::Result<()> {
         cli.typ,
         cli.force,
         use_exiftool,
+        cli.show_progress,
         cli.hash,
     )?;
     Ok(())

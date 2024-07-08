@@ -113,46 +113,6 @@ impl File {
     }
 }
 
-#[tracing::instrument]
-fn files<'a>(
-    root: &'a Path,
-    img_dir: &'a str,
-    vid_dir: &'a str,
-    ty_filter: Option<Typ>,
-    use_exiftool: bool,
-    hash: Hash,
-) -> impl rayon::iter::ParallelIterator<Item = File> + 'a {
-    FilePaths::find(root)
-        .par_bridge()
-        .filter_map(|p| read_type(&p).map(|t| (p, t)))
-        .filter_map(move |(path, ty_found)| {
-            tracing::debug!(?path, ?ty_filter, ?ty_found, "Type filter");
-            match ty_filter {
-                Some(ty_filter) if ty_filter == ty_found => {
-                    Some((path, ty_found))
-                }
-                None => Some((path, ty_found)),
-                Some(_) => None,
-            }
-        })
-        .filter_map(move |(path, typ)| {
-            read_timestamp(&path, typ, use_exiftool)
-                .ok()
-                .flatten()
-                .map(|timestamp| (path, typ, timestamp))
-        })
-        .filter_map(move |(path, typ, timestamp)| {
-            hash.digest(&path)
-                .ok()
-                .map(|digest| (path, typ, timestamp, digest))
-        })
-        .map(move |(path, typ, timestamp, digest)| {
-            File::new(
-                root, &path, typ, img_dir, vid_dir, timestamp, hash, &digest,
-            )
-        })
-}
-
 fn auxiliary_subpath(
     root: &Path,
     path: &Path,
@@ -220,6 +180,7 @@ pub fn organize<'a>(
     ty_filter: Option<Typ>,
     force: bool,
     use_exiftool: bool,
+    show_progress: bool,
     hash: Hash,
 ) -> anyhow::Result<()> {
     tracing::info!(?op, ?src_root, ?dst_root, "Starting");
@@ -240,7 +201,50 @@ pub fn organize<'a>(
         dst_root
     ))?;
     tracing::info!(?src_root, ?dst_root, "Canonicalized");
-    files(&src_root, img_dir, vid_dir, ty_filter, use_exiftool, hash)
+    let progress_bar = match op {
+        Op::Copy | Op::Move if show_progress => {
+            indicatif::ProgressBar::new(0)
+        }
+        _ => indicatif::ProgressBar::hidden(),
+    };
+    let progress_style = indicatif::ProgressStyle::with_template(
+        "{bar:100.green} {pos:>7} / {len:7}",
+    )?;
+    progress_bar.set_style(progress_style);
+    progress_bar.tick();
+    FilePaths::find(&src_root)
+        .par_bridge()
+        .filter_map(|p| {
+            progress_bar.inc_length(1);
+            read_type(&p).map(|t| (p, t))
+        })
+        .filter_map(move |(path, ty_found)| {
+            tracing::debug!(?path, ?ty_filter, ?ty_found, "Type filter");
+            match ty_filter {
+                Some(ty_filter) if ty_filter == ty_found => {
+                    Some((path, ty_found))
+                }
+                None => Some((path, ty_found)),
+                Some(_) => None,
+            }
+        })
+        .filter_map(move |(path, typ)| {
+            read_timestamp(&path, typ, use_exiftool)
+                .ok()
+                .flatten()
+                .map(|timestamp| (path, typ, timestamp))
+        })
+        .filter_map(move |(path, typ, timestamp)| {
+            hash.digest(&path)
+                .ok()
+                .map(|digest| (path, typ, timestamp, digest))
+        })
+        .map(move |(path, typ, timestamp, digest)| {
+            File::new(
+                &src_root, &path, typ, img_dir, vid_dir, timestamp, hash,
+                &digest,
+            )
+        })
         .for_each(|file| {
             let result = match op {
                 Op::Show => {
@@ -253,7 +257,9 @@ pub fn organize<'a>(
             if let Err(error) = result {
                 tracing::error!(?error, ?file, "Failed to organize");
             }
+            progress_bar.inc(1);
         });
+    progress_bar.finish();
     tracing::info!("Finished");
     Ok(())
 }
