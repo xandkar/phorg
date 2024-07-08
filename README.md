@@ -8,13 +8,23 @@ Idempotent photo/video file organizer.
 
 Given a `<src>` and `<dst>` directories:
 
-1. finds photo-or-video files in `<src>`
+1. finds photo/video files in `<src>`
 2. fetches their [Exif](https://en.wikipedia.org/wiki/Exif) data
 3. computes their hash digests
-4. moves-or-copies them into
-   `<dst>/{<img-dir>,<vid-dir>}/<year>/<month>/<day>/<date>--<time>--<digest>[.<extension>]`
-   where `<img-dir>` and `<vid-dir>` default to "img" and "vid", respectively,
-   and are customizable via CLI.
+4. moves/copies them into
+   `<dst>/{<img>,<vid>}/<year>/<month>/<day>/<date>--<time>--<digest>[.<ext>]`
+   where:
+    - `<img>` and `<vid>` default to "img" and "vid", respectively, and are
+      customizable via CLI
+    - date and time are extracted from Exif metadata, from whichever of the
+      follwoing tags is found first, tried in order:
+      + `DateTimeOriginal`
+      + `DateTimeCreated`
+      + `CreateDate`
+      + `DateCreated`
+      + `Datecreate`
+      + `CreationDate`
+      + `TrackCreateDate`
 
 Example:
 
