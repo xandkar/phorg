@@ -37,6 +37,7 @@ fn from_empty_dst() {
             ),
         ]
     );
+    // TODO Assert file contents did not change.
 }
 
 fn file_paths_sorted(root: &Path) -> Vec<PathBuf> {
