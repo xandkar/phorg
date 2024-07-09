@@ -8,8 +8,18 @@ main() {
     # local -r filename="$name"--"$date"--"$time".jpg
     local -r ext=jpg
     local -r filename="$name"."$ext"
+
+    # To increase likelihood of file content uniqueness,
+    # even if timestamps end up the same.
+    local -r salt=$(head -c 10 /dev/urandom | base64)
+    local -r pepper=$(head -c 10 /dev/urandom | base64)
+
     convert -size 1x1 xc:white "$filename"
-    exiftool -overwrite_original -DateTimeOriginal="$date $time" "$filename"
+    exiftool \
+        -overwrite_original \
+        -DateTimeOriginal="$date $time" \
+        -Comment="Salt: ${salt}. Pepper: ${pepper}." \
+        "$filename"
 }
 
 main "$@"

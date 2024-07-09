@@ -28,9 +28,9 @@ fn from_empty_dst() {
     .unwrap();
 
     let foo_src = "foo.jpg";
-    let foo_dst = "img/2000/12/27/2000-12-27--06:47:01--crc32:383ba95e.jpg";
+    let foo_dst = "img/2000/12/27/2000-12-27--06:47:01--crc32:46c1273c.jpg";
     let bar_src = "bar.jpg";
-    let bar_dst = "img/2010/01/31/2010-01-31--17:35:49--crc32:c653b4f3.jpg";
+    let bar_dst = "img/2010/01/31/2010-01-31--17:35:49--crc32:13c81260.jpg";
     let foo_src_path = src.join(foo_src);
     let bar_src_path = src.join(bar_src);
     let foo_dst_path = dst.join(foo_dst);
