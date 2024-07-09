@@ -376,12 +376,12 @@ fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
     })
 }
 
-struct FilePaths {
+pub struct FilePaths {
     frontier: VecDeque<PathBuf>,
 }
 
 impl FilePaths {
-    fn find(root: &Path) -> Self {
+    pub fn find(root: &Path) -> Self {
         let mut frontier = VecDeque::new();
         frontier.push_back(root.to_path_buf());
         Self { frontier }

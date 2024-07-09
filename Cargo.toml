@@ -27,3 +27,6 @@ sha2 = "0.10.8"
 thiserror = "1.0.61"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+
+[dev-dependencies]
+tempfile = "3.10.1"

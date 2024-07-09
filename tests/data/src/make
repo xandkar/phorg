@@ -1,0 +1,15 @@
+#! /bin/bash
+
+main() {
+    local -r name="$1"
+    local -r date="$2" # <year>:<mon>:<day>
+    local -r time="$3" # <hour>:<min>:<sec>
+
+    # local -r filename="$name"--"$date"--"$time".jpg
+    local -r ext=jpg
+    local -r filename="$name"."$ext"
+    convert -size 1x1 xc:white "$filename"
+    exiftool -overwrite_original -DateTimeOriginal="$date $time" "$filename"
+}
+
+main "$@"
