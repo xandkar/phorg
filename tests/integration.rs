@@ -2,25 +2,24 @@ use std::path::{Path, PathBuf};
 
 use tempfile::tempdir;
 
-use phorg::{files::Op, hash::Hash};
-
 #[test]
 fn from_empty_dst() {
     let src = PathBuf::from("tests/data/src");
     let dst = tempdir().unwrap();
     let dst = dst.path();
     assert!(file_paths_sorted(dst).is_empty());
+    // TODO Call as shell command.
     phorg::files::organize(
         &src,
         dst,
-        &Op::Copy,
+        &phorg::files::Op::Copy,
         "img",
         "vid",
         None,
         false,
         false,
         false,
-        Hash::Crc32,
+        phorg::hash::Hash::Crc32,
     )
     .unwrap();
     assert_eq!(
