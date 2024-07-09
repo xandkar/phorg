@@ -27,21 +27,25 @@ fn from_empty_dst() {
     )
     .unwrap();
 
-    let foo_before = "foo.jpg";
-    let foo_after = "img/2000/12/27/2000-12-27--06:47:01--crc32:383ba95e.jpg";
-    let bar_before = "bar.jpg";
-    let bar_after = "img/2010/01/31/2010-01-31--17:35:49--crc32:c653b4f3.jpg";
+    let foo_src = "foo.jpg";
+    let foo_dst = "img/2000/12/27/2000-12-27--06:47:01--crc32:383ba95e.jpg";
+    let bar_src = "bar.jpg";
+    let bar_dst = "img/2010/01/31/2010-01-31--17:35:49--crc32:c653b4f3.jpg";
+    let foo_src_path = src.join(foo_src);
+    let bar_src_path = src.join(bar_src);
+    let foo_dst_path = dst.join(foo_dst);
+    let bar_dst_path = dst.join(bar_dst);
 
     assert_eq!(
-        &file_paths_sorted(&src),
-        &vec![src.join(bar_before), src.join(foo_before), src.join("make"),]
+        &file_paths_sorted(&src).iter().collect::<Vec<&PathBuf>>(),
+        &vec![&bar_src_path, &foo_src_path, &src.join("make")]
     );
     assert_eq!(
-        &file_paths_sorted(dst),
-        &vec![dst.join(foo_after), dst.join(bar_after),]
+        &file_paths_sorted(&dst).iter().collect::<Vec<&PathBuf>>(),
+        &vec![&foo_dst_path, &bar_dst_path][..]
     );
-    assert!(files_eq(src.join(foo_before), dst.join(foo_after)).unwrap());
-    assert!(files_eq(src.join(bar_before), dst.join(bar_after)).unwrap());
+    assert!(files_eq(foo_src_path, foo_dst_path).unwrap());
+    assert!(files_eq(bar_src_path, bar_dst_path).unwrap());
 }
 
 fn file_paths_sorted(root: &Path) -> Vec<PathBuf> {
