@@ -31,7 +31,7 @@ Given a `<src>` and `<dst>` directories:
 5. optionally, you can (manually) add semantically-named subdirectories
    underneath the `<day>` directory and (manually) move the media files into
    them, these subdirectories will then be preserved on subsequent
-   reprocessing, i.e. when this `<dst>` is later used as `<src>`
+   reprocessings, i.e. when this `<dst>` is later used as `<src>`
 
 Example
 -------------------------------------------------------------------------------
