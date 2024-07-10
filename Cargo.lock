@@ -534,9 +534,9 @@ dependencies = [
 
 [[package]]
 name = "nom-exif"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4da85c96824dc1b583f55fd2c39e53b04482b4c199f25db27868db334bf06407"
+checksum = "15a1719ef4e8ca8a498fe9bef19dad8dba67508de39eb6ed22094b9af975c17e"
 dependencies = [
  "chrono",
  "nom",
@@ -592,7 +592,7 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "phorg"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "anyhow",
  "chrono",
