@@ -2,30 +2,23 @@ use std::{
     fs::{self, File},
     io::{self, Read},
     path::{Path, PathBuf},
+    process::Command,
 };
 
+use assert_cmd::{assert::OutputAssertExt, cargo::CommandCargoExt};
 use tempfile::tempdir;
 
 #[test]
 fn from_empty_dst() {
+    let exe = env!("CARGO_PKG_NAME");
     let src = PathBuf::from("tests/data/src");
     let dst = tempdir().unwrap();
     let dst = dst.path();
     assert!(file_paths_sorted(dst).is_empty());
-    // TODO Call as shell command.
-    phorg::files::organize(
-        &src,
-        dst,
-        &phorg::files::Op::Copy,
-        "img",
-        "vid",
-        None,
-        false,
-        false,
-        false,
-        phorg::hash::Hash::Crc32,
-    )
-    .unwrap();
+
+    let mut cmd = Command::cargo_bin(exe).unwrap();
+    cmd.arg(&src).arg(&dst).arg("copy");
+    cmd.assert().success();
 
     let foo_src = "foo.jpg";
     let foo_dst = "img/2000/12/27/2000-12-27--06:47:01--crc32:46c1273c.jpg";
