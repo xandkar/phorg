@@ -61,6 +61,7 @@ $ tree .
 Install
 -------------------------------------------------------------------------------
 
+0. Ensure a Rust `1.75.0`+ toolchain is installed: <https://www.rust-lang.org/tools/install>
 1. `cargo install phorg`
 2. Ensure `~/.cargo/bin/` is in your `PATH`
 3. `phorg help`
