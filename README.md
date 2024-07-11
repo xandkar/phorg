@@ -65,3 +65,19 @@ Install
 1. `cargo install phorg`
 2. Ensure `~/.cargo/bin/` is in your `PATH`
 3. `phorg help`
+
+Dependencies
+-------------------------------------------------------------------------------
+
+### Hard
+
+Only the Rust tools mentioned above, everything else will be handled by `cargo`.
+
+### Soft
+
+`exiftool`, which is used as a fallback whenever we fail to extract the needed
+metadata ourselves. This fallback **can be disabled** via CLI.
+
+Absence of `exiftool` in `PATH` will cause errors which will be logged, but
+**will not disrupt execution** and the files we could not read enough data
+about will just be skipped.
