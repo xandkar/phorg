@@ -73,21 +73,28 @@ where
 {
     use serde::Deserialize;
 
-    let fmt = "%Y:%m:%d %H:%M:%S";
-    // Take an owned string so we can modify it bellow:
-    let str_opt: Option<String> = Option::deserialize(deserializer)?;
-    match str_opt {
+    match Option::deserialize(deserializer)? {
         None => Ok(None),
-        Some(mut s) => {
-            // Drop timezone if it is present:
-            if let Some(pos) = s.find(['+', '-']) {
-                s.truncate(pos);
-            }
-            chrono::NaiveDateTime::parse_from_str(&s, fmt)
-                .map(Some)
-                .map_err(serde::de::Error::custom)
-        }
+        Some(data) => naive_date_time_parse(data)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
     }
+}
+
+fn naive_date_time_parse(
+    data: &str,
+) -> chrono::format::ParseResult<Timestamp> {
+    const FMT: &str = "%Y:%m:%d %H:%M:%S";
+    let mut data = data.to_owned();
+    // Drop timezone if it is present:
+    if let Some(pos) = data.find(['+', '-']) {
+        data.truncate(pos);
+    }
+    // Drop subseconds if they're present:
+    if let Some(pos) = data.find(['.']) {
+        data.truncate(pos);
+    }
+    chrono::NaiveDateTime::parse_from_str(&data, FMT)
 }
 
 #[tracing::instrument(skip_all)]
@@ -137,5 +144,45 @@ fn cmd(exe: &str, args: &[&str]) -> Option<Vec<u8>> {
             "Failed to execute command."
         );
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn t_naive_date_time_parse() {
+        assert!(naive_date_time_parse("").is_err());
+        assert!(naive_date_time_parse("-200:88:90 1:2:3").is_err());
+        assert_eq!(
+            chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd_opt(2022, 10, 3).unwrap(),
+                chrono::NaiveTime::from_hms_opt(17, 52, 16).unwrap(),
+            ),
+            naive_date_time_parse("2022:10:03 17:52:16.597752928733826Z")
+                .unwrap()
+        );
+        assert_eq!(
+            chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd_opt(2022, 10, 3).unwrap(),
+                chrono::NaiveTime::from_hms_opt(17, 52, 16).unwrap(),
+            ),
+            naive_date_time_parse("2022:10:03 17:52:16").unwrap()
+        );
+        assert_eq!(
+            chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd_opt(2022, 10, 3).unwrap(),
+                chrono::NaiveTime::from_hms_opt(17, 52, 16).unwrap(),
+            ),
+            naive_date_time_parse("2022:10:03 17:52:16+4:00").unwrap()
+        );
+        assert_eq!(
+            chrono::NaiveDateTime::new(
+                chrono::NaiveDate::from_ymd_opt(2022, 10, 3).unwrap(),
+                chrono::NaiveTime::from_hms_opt(17, 52, 16).unwrap(),
+            ),
+            naive_date_time_parse("2022:10:03 17:52:16-7:00").unwrap()
+        );
     }
 }
