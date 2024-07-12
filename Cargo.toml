@@ -1,6 +1,6 @@
 [package]
 name = "phorg"
-version = "0.17.1"
+version = "0.17.2"
 description = "Idempotent photo/video file organizer"
 repository = "https://github.com/xandkar/phorg"
 keywords = ["photo", "organizer", "exif"]
@@ -18,7 +18,7 @@ indicatif = "0.17.8"
 infer = "0.16.0"
 kamadak-exif = "0.5.5"
 md-5 = "0.10.6"
-nom-exif = "1.2.1"
+nom-exif = "1.2.4"
 rayon = "1.10.0"
 serde = { version = "1.0.204", features = ["derive"] }
 serde_json = "1.0.120"
