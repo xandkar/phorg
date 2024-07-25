@@ -36,12 +36,25 @@ fn from_empty_dst() {
     );
     let bar_dst_path = dst.join(bar_dst);
 
+    let baz_src = "baz.jpg";
+    let baz_src_path = src.join(baz_src);
+    let baz_dst = format!(
+        "img/2022/10/03/2022-10-03--17:52:16--{}.jpg",
+        hash(&baz_src_path)
+    );
+    let baz_dst_path = dst.join(baz_dst);
+
     assert_eq!(
-        &vec![&bar_src_path, &foo_src_path, &src.join("make")],
+        &vec![
+            &bar_src_path,
+            &baz_src_path,
+            &foo_src_path,
+            &src.join("make")
+        ],
         &file_paths_sorted(&src).iter().collect::<Vec<&PathBuf>>()
     );
     assert_eq!(
-        &vec![&foo_dst_path, &bar_dst_path][..],
+        &vec![&foo_dst_path, &bar_dst_path, &baz_dst_path][..],
         &file_paths_sorted(&dst).iter().collect::<Vec<&PathBuf>>()
     );
     assert!(files_eq(foo_src_path, foo_dst_path).unwrap());

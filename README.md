@@ -22,11 +22,11 @@ Given a `<src>` and `<dst>` directories:
     - date and time are extracted from Exif metadata, from whichever of the
       following tags is found first, tried in order:
       + `DateTimeOriginal`
+      + `CreationDate`
       + `DateTimeCreated`
       + `CreateDate`
       + `DateCreated`
       + `Datecreate`
-      + `CreationDate`
       + `TrackCreateDate`
 5. optionally, you can (manually) add semantically-named subdirectories
    underneath the `<day>` directory and (manually) move the media files into

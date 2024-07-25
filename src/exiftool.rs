@@ -124,10 +124,10 @@ pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
     } = fields_vec.pop()?;
     date_time_original
         .or(date_time_created)
+        .or(creation_date)
         .or(create_date)
         .or(date_created)
         .or(date_create)
-        .or(creation_date)
         .or(track_create_date)
 }
 
