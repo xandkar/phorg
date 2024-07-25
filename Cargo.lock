@@ -582,7 +582,8 @@ dependencies = [
 [[package]]
 name = "nom-exif"
 version = "1.3.0"
-source = "git+https://github.com/mindeng/nom-exif.git?rev=a03defb27706e3c3e2db7e4e55d52bf328971809#a03defb27706e3c3e2db7e4e55d52bf328971809"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab35c38930e837f191de96c6f23e8dee7547916fbae0ce25e4d5fad405bbc2d2"
 dependencies = [
  "chrono",
  "nom",
