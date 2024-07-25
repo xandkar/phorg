@@ -21,24 +21,39 @@ fn from_empty_dst() {
     cmd.assert().success();
 
     let foo_src = "foo.jpg";
-    let foo_dst = "img/2000/12/27/2000-12-27--06:47:01--crc32:46c1273c.jpg";
-    let bar_src = "bar.jpg";
-    let bar_dst = "img/2010/01/31/2010-01-31--17:35:49--crc32:13c81260.jpg";
     let foo_src_path = src.join(foo_src);
-    let bar_src_path = src.join(bar_src);
+    let foo_dst = format!(
+        "img/2000/12/27/2000-12-27--06:47:01--{}.jpg",
+        hash(&foo_src_path)
+    );
     let foo_dst_path = dst.join(foo_dst);
+
+    let bar_src = "bar.jpg";
+    let bar_src_path = src.join(bar_src);
+    let bar_dst = format!(
+        "img/2010/01/31/2010-01-31--17:35:49--{}.jpg",
+        hash(&bar_src_path)
+    );
     let bar_dst_path = dst.join(bar_dst);
 
     assert_eq!(
-        &file_paths_sorted(&src).iter().collect::<Vec<&PathBuf>>(),
-        &vec![&bar_src_path, &foo_src_path, &src.join("make")]
+        &vec![&bar_src_path, &foo_src_path, &src.join("make")],
+        &file_paths_sorted(&src).iter().collect::<Vec<&PathBuf>>()
     );
     assert_eq!(
-        &file_paths_sorted(&dst).iter().collect::<Vec<&PathBuf>>(),
-        &vec![&foo_dst_path, &bar_dst_path][..]
+        &vec![&foo_dst_path, &bar_dst_path][..],
+        &file_paths_sorted(&dst).iter().collect::<Vec<&PathBuf>>()
     );
     assert!(files_eq(foo_src_path, foo_dst_path).unwrap());
     assert!(files_eq(bar_src_path, bar_dst_path).unwrap());
+}
+
+fn hash(path: &Path) -> String {
+    format!(
+        "{}:{}",
+        phorg::hash::Hash::Crc32.name(),
+        phorg::hash::Hash::Crc32.digest(path).unwrap()
+    )
 }
 
 fn file_paths_sorted(root: &Path) -> Vec<PathBuf> {
