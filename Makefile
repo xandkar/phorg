@@ -32,3 +32,28 @@ coverage_html:
 .PHONY: install
 install:
 	cargo install --path .
+
+# Release =====================================================================
+
+.PHONY: release
+release:
+	$(MAKE) -s version_check
+	$(MAKE) -s version_tag
+	$(MAKE) -s tags_push
+	$(MAKE) -s crate_publish
+
+.PHONY: version_check
+version_check:
+	cargo semver-checks
+
+.PHONY: version_tag
+version_tag:
+	git tag v$$(cargo pkgid | awk -F'#' '{print $$2}')
+
+.PHONY: tags_push
+tags_push:
+	git push --tags origin
+
+.PHONY: crate_publish
+crate_publish:
+	cargo publish
