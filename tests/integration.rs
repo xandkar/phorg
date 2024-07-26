@@ -10,6 +10,8 @@ use tempfile::tempdir;
 
 #[test]
 fn from_empty_dst() {
+    phorg::tracing_init_tests(tracing::Level::DEBUG);
+
     let exe = env!("CARGO_PKG_NAME");
     let src = PathBuf::from("tests/data/src");
     let dst = tempdir().unwrap();

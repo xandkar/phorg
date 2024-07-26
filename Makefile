@@ -1,7 +1,7 @@
 .PHONY: checks
 checks:
 	cargo check
-	cargo test
+	cargo test -- --nocapture
 	cargo clippy -- \
 		-W clippy::pedantic \
 		-W clippy::cast-possible-truncation \

@@ -22,3 +22,17 @@ pub fn tracing_init(level: Option<tracing::Level>) -> anyhow::Result<()> {
     }
     Ok(())
 }
+
+pub fn tracing_init_tests(level: tracing::Level) {
+    let _ = tracing_subscriber::fmt()
+        .with_test_writer()
+        .with_ansi(true)
+        .with_file(false)
+        .with_line_number(true)
+        .with_thread_ids(true)
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::from_default_env()
+                .add_directive(level.into()),
+        )
+        .try_init();
+}
