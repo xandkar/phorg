@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     name: ubuntu / nightly
     steps:
+      - name: apt install libimage-exiftool-perl
+        run: sudo apt -y install libimage-exiftool-perl
       - uses: actions/checkout@v4
         with:
           submodules: true
@@ -36,6 +38,8 @@ jobs:
     # Unfortunately, hashFiles only works in if on steps, so we reepeat it.
     # if: hashFiles('Cargo.lock') != ''
     steps:
+      - name: apt install libimage-exiftool-perl
+        run: sudo apt -y install libimage-exiftool-perl
       - uses: actions/checkout@v4
         with:
           submodules: true
