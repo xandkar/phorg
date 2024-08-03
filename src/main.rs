@@ -51,6 +51,7 @@ struct Cli {
 }
 
 fn main() -> anyhow::Result<()> {
+    human_panic_setup();
     let cli = Cli::parse();
     phorg::tracing_init(Some(cli.log_level))?;
     let use_exiftool = !cli.no_exiftool;
@@ -67,4 +68,19 @@ fn main() -> anyhow::Result<()> {
         cli.hash,
     )?;
     Ok(())
+}
+
+fn human_panic_setup() {
+    macro_rules! repo {
+        () => {
+            env!("CARGO_PKG_REPOSITORY")
+        };
+    }
+    human_panic::setup_panic!(human_panic::Metadata::new(
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION")
+    )
+    .authors(env!("CARGO_PKG_AUTHORS"))
+    .homepage(repo!())
+    .support(concat!("- Submit an issue at ", repo!(), "/issues")));
 }

@@ -1,8 +1,9 @@
 [package]
 name = "phorg"
-version = "0.17.5"
+version = "0.17.6"
 description = "Idempotent photo/video file organizer"
 repository = "https://github.com/xandkar/phorg"
+authors = ["Siraaj Khandkar <siraaj@khandkar.net>"]
 keywords = ["photo", "organizer", "exif"]
 categories = ["command-line-utilities"]
 license-file = "LICENSE"
@@ -14,6 +15,7 @@ anyhow = { version = "1.0.86", features = ["backtrace"] }
 chrono = "0.4.38"
 clap = { version = "4.5.7", features = ["derive"] }
 crc32fast = "1.4.2"
+human-panic = "2.0.1"
 indicatif = "0.17.8"
 infer = "0.16.0"
 kamadak-exif = "0.5.5"
