@@ -67,7 +67,7 @@ impl File {
         println!("{:?} --> {:?}", self.src, dst_root.join(&self.dst));
     }
 
-    #[tracing::instrument]
+    #[tracing::instrument(level = "error")]
     fn organize(
         &self,
         dst_root: &Path,
@@ -149,7 +149,7 @@ fn are_nums(strs: &[&OsStr]) -> bool {
     count_all == count_nums
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "error")]
 fn read_type(path: &Path) -> Option<Typ> {
     infer::get_from_path(path)
         .map(|matcher_type_opt| {
@@ -170,7 +170,7 @@ fn read_type(path: &Path) -> Option<Typ> {
 }
 
 #[allow(clippy::too_many_arguments)] // TODO Remove, after combining args.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "error", skip_all)]
 pub fn organize<'a>(
     src_root: &'a Path,
     dst_root: &'a Path,
@@ -330,7 +330,7 @@ fn dst(
     dir.join(name)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "error", skip_all, fields(path = ?path))]
 fn read_timestamp(
     path: &Path,
     typ: Typ,
@@ -350,10 +350,14 @@ fn read_timestamp(
     Ok(timestamp)
 }
 
+#[tracing::instrument(level = "error", skip_all)]
 fn read_timestamp_img(file: &fs::File) -> Option<Timestamp> {
     let mut bufreader = std::io::BufReader::new(file);
     exif::Reader::new()
         .read_from_container(&mut bufreader)
+        .map_err(|error| {
+            tracing::error!(?error, "exif read_from_container failed.");
+        })
         .ok()
         .and_then(|exif| {
             get_date_time_original(&exif)
@@ -362,18 +366,24 @@ fn read_timestamp_img(file: &fs::File) -> Option<Timestamp> {
         })
 }
 
+#[tracing::instrument(level = "error", skip_all)]
 fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
-    nom_exif::parse_metadata(file).ok().and_then(|pairs| {
-        pairs
-            .iter()
-            .find(|(k, _)| k == "com.apple.quicktime.creationdate")
-            .map(|(_, v)| v)
-            .and_then(|entry| match entry {
-                nom_exif::EntryValue::Time(t) => Some(t),
-                _ => None,
-            })
-            .map(|t| t.naive_local())
-    })
+    nom_exif::parse_metadata(file)
+        .map_err(|error| {
+            tracing::error!(?error, "nom_exif parse_metadata failed.");
+        })
+        .ok()
+        .and_then(|pairs| {
+            pairs
+                .iter()
+                .find(|(k, _)| k == "com.apple.quicktime.creationdate")
+                .map(|(_, v)| v)
+                .and_then(|entry| match entry {
+                    nom_exif::EntryValue::Time(t) => Some(t),
+                    _ => None,
+                })
+                .map(|t| t.naive_local())
+        })
 }
 
 pub struct FilePaths {

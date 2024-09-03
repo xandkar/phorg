@@ -64,7 +64,7 @@ struct Fields {
     _file_modify_date: Option<Timestamp>,
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "error", skip_all)]
 fn exiftool_parse_date<'de, D>(
     deserializer: D,
 ) -> Result<Option<Timestamp>, D::Error>
@@ -97,7 +97,7 @@ fn naive_date_time_parse(
     chrono::NaiveDateTime::parse_from_str(&data, FMT)
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(level = "error", skip_all)]
 pub fn read_timestamp(path: &Path) -> Option<Timestamp> {
     let path = path.as_os_str().to_string_lossy().to_string();
     let out = cmd("exiftool", &["-json", &path])?;
