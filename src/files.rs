@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
@@ -368,22 +368,40 @@ fn read_timestamp_img(file: &fs::File) -> Option<Timestamp> {
 
 #[tracing::instrument(level = "error", skip_all)]
 fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
-    nom_exif::parse_metadata(file)
-        .map_err(|error| {
-            tracing::error!(?error, "nom_exif parse_metadata failed.");
-        })
-        .ok()
-        .and_then(|pairs| {
-            pairs
-                .iter()
-                .find(|(k, _)| k == "com.apple.quicktime.creationdate")
-                .map(|(_, v)| v)
-                .and_then(|entry| match entry {
-                    nom_exif::EntryValue::Time(t) => Some(t),
-                    _ => None,
+    use nom_exif::{
+        EntryValue, ExifIter, ExifTag, MediaParser, MediaSource, TrackInfo,
+        TrackInfoTag,
+    };
+
+    // TODO Should a parser instace be re-used for multiple files?
+    let mut parser = MediaParser::new();
+    let source = MediaSource::seekable(file).ok()?;
+
+    if source.has_track() {
+        let info: TrackInfo = parser.parse(source).ok()?;
+        match info.get(TrackInfoTag::CreateDate)? {
+            EntryValue::Time(t) => Some(t.naive_local()),
+            _ => None,
+        }
+    } else if source.has_exif() {
+        let entries: ExifIter = parser.parse(source).ok()?;
+        let entries: HashMap<ExifTag, EntryValue> = entries
+            .filter_map(|entry| {
+                entry.tag().and_then(|tag| {
+                    entry.get_value().map(|val| (tag, val.to_owned()))
                 })
-                .map(|t| t.naive_local())
-        })
+            })
+            .collect();
+        match entries
+            .get(&ExifTag::DateTimeOriginal)
+            .or_else(|| entries.get(&ExifTag::CreateDate))?
+        {
+            EntryValue::Time(t) => Some(t.naive_local()),
+            _ => None,
+        }
+    } else {
+        None
+    }
 }
 
 pub struct FilePaths {
