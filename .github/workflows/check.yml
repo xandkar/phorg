@@ -81,7 +81,8 @@ jobs:
     strategy:
       matrix:
         # msrv: [1.56.1] # 2021 edition requires 1.56
-        msrv: [1.75.0] # async traits supported since 1.75.0
+        # msrv: [1.75.0] # async traits supported since 1.75.0
+        msrv: [1.80.0] # nom-exif v2.2.1 requires 1.80.0
     name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v4
