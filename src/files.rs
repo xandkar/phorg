@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     ffi::OsStr,
     fs,
     path::{Path, PathBuf},
@@ -369,8 +369,8 @@ fn read_timestamp_img(file: &fs::File) -> Option<Timestamp> {
 #[tracing::instrument(level = "error", skip_all)]
 fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
     use nom_exif::{
-        EntryValue, ExifIter, ExifTag, MediaParser, MediaSource, TrackInfo,
-        TrackInfoTag,
+        EntryValue, Exif, ExifIter, ExifTag, MediaParser, MediaSource,
+        TrackInfo, TrackInfoTag,
     };
 
     // TODO Should a parser instace be re-used for multiple files?
@@ -385,20 +385,14 @@ fn read_timestamp_vid(file: &fs::File) -> Option<Timestamp> {
         }
     } else if source.has_exif() {
         let entries: ExifIter = parser.parse(source).ok()?;
-        let entries: HashMap<ExifTag, EntryValue> = entries
-            .filter_map(|entry| {
-                entry.tag().and_then(|tag| {
-                    entry.get_value().map(|val| (tag, val.to_owned()))
-                })
+        let entries: Exif = entries.into();
+        entries
+            .get(ExifTag::DateTimeOriginal)
+            .or_else(|| entries.get(ExifTag::CreateDate))
+            .and_then(|entry| match entry {
+                EntryValue::Time(t) => Some(t.naive_local()),
+                _ => None,
             })
-            .collect();
-        match entries
-            .get(&ExifTag::DateTimeOriginal)
-            .or_else(|| entries.get(&ExifTag::CreateDate))?
-        {
-            EntryValue::Time(t) => Some(t.naive_local()),
-            _ => None,
-        }
     } else {
         None
     }
